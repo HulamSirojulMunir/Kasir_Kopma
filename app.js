@@ -1,0 +1,365 @@
+const STORAGE_KEY = "kopma-kasir-data-v1";
+const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
+const fullDateFormatter = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const today = localDateValue(new Date());
+let toastTimeout;
+let state = loadState();
+let dashboardPeriod = "day";
+let editingProductId = null;
+
+function localDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    const products = Array.isArray(saved.products) ? saved.products : [];
+    const transactions = Array.isArray(saved.transactions) ? saved.transactions : [];
+    return {
+      products: products.filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && Number.isFinite(item.sellingPrice ?? item.price) && (item.sellingPrice ?? item.price) > 0).map((item) => ({
+        ...item,
+        sellingPrice: item.sellingPrice ?? item.price,
+        buyPrice: Number.isSafeInteger(item.buyPrice) && item.buyPrice >= 0 ? item.buyPrice : null
+      })),
+      transactions: transactions.filter((item) => item && typeof item.id === "string" && typeof item.description === "string" && ["income", "expense"].includes(item.type) && Number.isFinite(item.amount) && item.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date))
+    };
+  } catch (error) {
+    console.error("Data kasir tidak dapat dibaca dari penyimpanan browser.", error);
+    window.addEventListener("DOMContentLoaded", () => showToast("Data tersimpan tidak dapat dibaca. Silakan periksa penyimpanan browser.", true), { once: true });
+    return { products: [], transactions: [] };
+  }
+}
+
+function persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    console.error("Data kasir gagal disimpan ke penyimpanan browser.", error);
+    showToast("Data gagal disimpan. Periksa ruang penyimpanan browser.", true);
+    return false;
+  }
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.toggle("error", isError);
+  toast.classList.add("show");
+  window.clearTimeout(toastTimeout);
+  toastTimeout = window.setTimeout(() => toast.classList.remove("show"), 2800);
+}
+
+function formatDate(value, formatter = dateFormatter) {
+  const [year, month, day] = value.split("-").map(Number);
+  return formatter.format(new Date(year, month - 1, day));
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
+}
+
+function getPeriodTransactions(period, value) {
+  return state.transactions.filter((item) => period === "day" ? item.date === value : item.date.startsWith(value));
+}
+
+function totals(transactions) {
+  const income = transactions.filter((item) => item.type === "income").reduce((sum, item) => sum + item.amount, 0);
+  const expense = transactions.filter((item) => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);
+  return { income, expense, balance: income - expense, count: transactions.length };
+}
+
+function renderDashboard() {
+  const selectedDate = document.getElementById("dashboard-date").value || today;
+  const periodValue = dashboardPeriod === "day" ? selectedDate : selectedDate.slice(0, 7);
+  const entries = getPeriodTransactions(dashboardPeriod, periodValue);
+  const summary = totals(entries);
+  document.getElementById("income-total").textContent = currency.format(summary.income);
+  document.getElementById("expense-total").textContent = currency.format(summary.expense);
+  document.getElementById("balance-total").textContent = currency.format(summary.balance);
+  document.getElementById("transaction-count").textContent = summary.count.toLocaleString("id-ID");
+  document.getElementById("period-label").textContent = dashboardPeriod === "day" ? "Pilih tanggal" : "Pilih bulan";
+  document.getElementById("dashboard-date").type = dashboardPeriod === "day" ? "date" : "month";
+  document.getElementById("chart-subtitle").textContent = dashboardPeriod === "day" ? "Pemasukan & pengeluaran 7 hari terakhir" : "Pemasukan & pengeluaran per rentang tanggal";
+  renderChart(selectedDate);
+  renderRecent();
+}
+
+function renderChart(selectedDate) {
+  const monthValue = selectedDate.slice(0, 7);
+  const [year, month] = monthValue.split("-").map(Number);
+  let buckets;
+  if (dashboardPeriod === "month") {
+    const days = new Date(year, month, 0).getDate();
+    const step = Math.max(1, Math.ceil(days / 7));
+    buckets = Array.from({ length: Math.ceil(days / step) }, (_, index) => {
+      const startDay = index * step + 1;
+      const endDay = Math.min(days, startDay + step - 1);
+      return { label: `${startDay}`, dateStart: `${monthValue}-${String(startDay).padStart(2, "0")}`, dateEnd: `${monthValue}-${String(endDay).padStart(2, "0")}` };
+    });
+  } else {
+    const selected = new Date(year, month - 1, Number(selectedDate.slice(8, 10)));
+    buckets = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(selected);
+      date.setDate(selected.getDate() - (6 - index));
+      return { label: new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" }).format(date), dateStart: localDateValue(date), dateEnd: localDateValue(date) };
+    });
+  }
+  const values = buckets.map((bucket) => {
+    const items = state.transactions.filter((item) => item.date >= bucket.dateStart && item.date <= bucket.dateEnd);
+    return { ...bucket, ...totals(items) };
+  });
+  const max = Math.max(1, ...values.flatMap((item) => [item.income, item.expense]));
+  document.getElementById("cash-chart").innerHTML = values.map((item) => `
+    <div class="chart-column" title="${escapeHTML(item.label)}: masuk ${currency.format(item.income)}, keluar ${currency.format(item.expense)}">
+      <div class="bar-pair"><span class="bar" style="height:${Math.max(item.income ? 4 : 0, item.income / max * 100)}%"></span><span class="bar out" style="height:${Math.max(item.expense ? 4 : 0, item.expense / max * 100)}%"></span></div>
+      <span class="chart-label">${escapeHTML(item.label)}</span>
+    </div>`).join("");
+}
+
+function transactionRow(item) {
+  const income = item.type === "income";
+  const type = income ? "income" : "expense";
+  return `<tr>
+    <td><div class="transaction-name"><span class="transaction-icon ${type}">${income ? "↗" : "↙"}</span>${escapeHTML(item.description)}</div></td>
+    <td><span class="type-badge ${type}"><span>${income ? "↗" : "↙"}</span>${income ? "Uang masuk" : "Uang keluar"}</span></td>
+    <td>${formatDate(item.date)}</td>
+    <td class="align-right ${income ? "amount-in" : "amount-out"}">${income ? "+" : "−"}${currency.format(item.amount)}</td>
+  </tr>`;
+}
+
+function renderRecent() {
+  const target = document.getElementById("recent-transactions");
+  const recent = [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  target.innerHTML = recent.length ? `<div class="table-wrap"><table><thead><tr><th>KETERANGAN</th><th>JENIS</th><th>TANGGAL</th><th class="align-right">JUMLAH</th></tr></thead><tbody>${recent.map(transactionRow).join("")}</tbody></table></div>` : `<div class="empty-state show"><span class="empty-icon">↕</span><strong>Belum ada transaksi</strong><p>Transaksi terbarumu akan muncul di sini.</p></div>`;
+}
+
+function renderProducts() {
+  const query = document.getElementById("product-search").value.trim().toLocaleLowerCase("id");
+  const products = [...state.products].sort((a, b) => a.name.localeCompare(b.name, "id"));
+  const filtered = products.filter((item) => item.name.toLocaleLowerCase("id").includes(query));
+  document.getElementById("product-count").textContent = products.length.toLocaleString("id-ID");
+  const rows = document.getElementById("product-rows");
+  rows.innerHTML = filtered.map((item) => `<tr>
+    <td><div class="product-name-cell"><span class="product-thumb">▤</span>${escapeHTML(item.name)}</div></td>
+    <td>${item.buyPrice === null ? '<span class="legacy-price">Belum diatur</span>' : currency.format(item.buyPrice)}</td>
+    <td class="amount-in">${currency.format(item.sellingPrice)}</td>
+    <td><span class="profit-badge ${item.buyPrice === null ? "profit-unknown" : item.sellingPrice >= item.buyPrice ? "profit-positive" : "profit-negative"}">${item.buyPrice === null ? "—" : currency.format(item.sellingPrice - item.buyPrice)}</span></td>
+    <td>${formatDate(item.createdAt.slice(0, 10))}</td>
+    <td class="align-right product-actions"><button class="text-button edit-product" data-edit-product="${escapeHTML(item.id)}" aria-label="Ubah ${escapeHTML(item.name)}">Ubah</button><button class="text-button sell-product" data-product-id="${escapeHTML(item.id)}" aria-label="Catat penjualan ${escapeHTML(item.name)}">Catat jual</button><button class="product-delete" data-delete-product="${escapeHTML(item.id)}" aria-label="Hapus ${escapeHTML(item.name)}">×</button></td>
+  </tr>`).join("");
+  const empty = document.getElementById("products-empty");
+  empty.classList.toggle("show", filtered.length === 0);
+  empty.querySelector("strong").textContent = products.length && query ? "Barang tidak ditemukan" : "Belum ada barang";
+  empty.querySelector("p").textContent = products.length && query ? "Coba kata kunci pencarian yang lain." : "Tambahkan barang pertamamu lewat formulir di sebelah.";
+}
+
+function renderTransactions() {
+  const kind = document.getElementById("transaction-filter").value;
+  const month = document.getElementById("transaction-date-filter").value;
+  const filtered = [...state.transactions]
+    .filter((item) => (kind === "all" || item.type === kind) && (!month || item.date.startsWith(month)))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  document.getElementById("transaction-rows").innerHTML = filtered.map(transactionRow).join("");
+  document.getElementById("transactions-empty").classList.toggle("show", filtered.length === 0);
+  document.querySelector("#transactions-empty strong").textContent = state.transactions.length ? "Transaksi tidak ditemukan" : "Belum ada transaksi";
+  document.querySelector("#transactions-empty p").textContent = state.transactions.length ? "Coba ubah filter jenis atau bulan." : "Transaksi yang kamu catat akan muncul di sini.";
+}
+
+function renderReport() {
+  const month = document.getElementById("report-month").value || today.slice(0, 7);
+  const entries = getPeriodTransactions("month", month);
+  const summary = totals(entries);
+  document.getElementById("report-income").textContent = currency.format(summary.income);
+  document.getElementById("report-expense").textContent = currency.format(summary.expense);
+  document.getElementById("report-balance").textContent = currency.format(summary.balance);
+  document.getElementById("report-count").textContent = summary.count.toLocaleString("id-ID");
+  const days = new Map();
+  entries.forEach((item) => {
+    const daily = days.get(item.date) || { income: 0, expense: 0, count: 0 };
+    daily[item.type] += item.amount;
+    daily.count += 1;
+    days.set(item.date, daily);
+  });
+  const rows = [...days.entries()].sort(([a], [b]) => b.localeCompare(a));
+  document.getElementById("report-rows").innerHTML = rows.map(([date, daily]) => `<tr>
+    <td>${formatDate(date, fullDateFormatter)}</td><td class="align-right amount-in">${currency.format(daily.income)}</td>
+    <td class="align-right amount-out">${currency.format(daily.expense)}</td><td class="align-right">${currency.format(daily.income - daily.expense)}</td>
+    <td class="align-right">${daily.count.toLocaleString("id-ID")}</td></tr>`).join("");
+  document.getElementById("reports-empty").classList.toggle("show", rows.length === 0);
+}
+
+function renderAll() {
+  renderDashboard();
+  renderProducts();
+  renderTransactions();
+  renderReport();
+}
+
+function openTransaction(type) {
+  const form = document.getElementById("transaction-form");
+  form.reset();
+  form.elements.date.value = today;
+  if (type === "income" || type === "expense") form.elements.type.value = type;
+  document.getElementById("transaction-dialog").showModal();
+  form.elements.description.focus();
+}
+
+function resetProductForm() {
+  const form = document.getElementById("product-form");
+  form.reset();
+  editingProductId = null;
+  document.getElementById("product-form-title").textContent = "Tambah barang";
+  document.getElementById("product-form-description").textContent = "Atur modal dan harga jual barang.";
+  document.getElementById("product-submit").innerHTML = 'Simpan barang <span>→</span>';
+  document.getElementById("cancel-product-edit").hidden = true;
+}
+
+document.getElementById("today-label").textContent = formatDate(today, fullDateFormatter);
+document.getElementById("dashboard-date").value = today;
+document.getElementById("report-month").value = today.slice(0, 7);
+document.getElementById("transaction-date-filter").value = today.slice(0, 7);
+renderAll();
+
+document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
+  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item === button));
+  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${button.dataset.view}`));
+  document.getElementById("page-crumb").textContent = button.textContent.trim();
+}));
+
+document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => {
+  document.querySelector(`.nav-item[data-view="${button.dataset.go}"]`).click();
+}));
+
+document.querySelectorAll("[data-open-transaction]").forEach((button) => button.addEventListener("click", () => openTransaction(button.dataset.type)));
+
+document.querySelectorAll(".period-option").forEach((button) => button.addEventListener("click", () => {
+  const previousValue = document.getElementById("dashboard-date").value;
+  dashboardPeriod = button.dataset.period;
+  document.querySelectorAll(".period-option").forEach((item) => item.classList.toggle("active", item === button));
+  const dateInput = document.getElementById("dashboard-date");
+  dateInput.type = dashboardPeriod === "day" ? "date" : "month";
+  dateInput.value = dashboardPeriod === "day" ? (previousValue.length === 7 ? `${previousValue}-${today.slice(8, 10)}` : previousValue) : previousValue.slice(0, 7);
+  renderDashboard();
+}));
+
+document.getElementById("dashboard-date").addEventListener("change", renderDashboard);
+document.getElementById("report-month").addEventListener("change", renderReport);
+document.getElementById("product-search").addEventListener("input", renderProducts);
+document.getElementById("transaction-filter").addEventListener("change", renderTransactions);
+document.getElementById("transaction-date-filter").addEventListener("change", renderTransactions);
+
+document.getElementById("product-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = form.elements.name.value.trim();
+  const buyPrice = Number(form.elements.buyPrice.value);
+  const sellingPrice = Number(form.elements.sellingPrice.value);
+  if (!name || !Number.isSafeInteger(buyPrice) || buyPrice < 0 || !Number.isSafeInteger(sellingPrice) || sellingPrice < 1) {
+    showToast("Isi nama barang, harga beli, dan harga jual dengan benar.", true);
+    return;
+  }
+  let originalProduct;
+  if (editingProductId) {
+    const index = state.products.findIndex((item) => item.id === editingProductId);
+    if (index < 0) {
+      resetProductForm();
+      showToast("Barang tidak ditemukan. Silakan muat ulang daftar barang.", true);
+      return;
+    }
+    originalProduct = state.products[index];
+    state.products[index] = { ...originalProduct, name, buyPrice, sellingPrice };
+  } else {
+    state.products.push({ id: crypto.randomUUID(), name, buyPrice, sellingPrice, createdAt: new Date().toISOString() });
+  }
+  if (!persistState()) {
+    if (editingProductId) {
+      const index = state.products.findIndex((item) => item.id === editingProductId);
+      if (index >= 0) state.products[index] = originalProduct;
+    } else {
+      state.products.pop();
+    }
+    return;
+  }
+  const wasEditing = Boolean(editingProductId);
+  resetProductForm();
+  renderProducts();
+  showToast(wasEditing ? "Perubahan barang berhasil disimpan." : "Barang berhasil disimpan.");
+});
+
+document.getElementById("product-rows").addEventListener("click", (event) => {
+  const sellButton = event.target.closest("[data-product-id]");
+  const editButton = event.target.closest("[data-edit-product]");
+  const deleteButton = event.target.closest("[data-delete-product]");
+  if (editButton) {
+    const product = state.products.find((item) => item.id === editButton.dataset.editProduct);
+    if (!product) return;
+    editingProductId = product.id;
+    const form = document.getElementById("product-form");
+    form.elements.name.value = product.name;
+    form.elements.buyPrice.value = product.buyPrice ?? "";
+    form.elements.sellingPrice.value = product.sellingPrice;
+    document.getElementById("product-form-title").textContent = "Ubah barang";
+    document.getElementById("product-form-description").textContent = "Perbarui modal atau harga jual barang.";
+    document.getElementById("product-submit").innerHTML = 'Simpan perubahan <span>→</span>';
+    document.getElementById("cancel-product-edit").hidden = false;
+    form.elements.name.focus();
+  }
+  if (sellButton) {
+    const product = state.products.find((item) => item.id === sellButton.dataset.productId);
+    if (!product) return;
+    openTransaction("income");
+    const form = document.getElementById("transaction-form");
+    form.elements.description.value = `Penjualan ${product.name}`;
+    form.elements.amount.value = product.sellingPrice;
+  }
+  if (deleteButton) {
+    const index = state.products.findIndex((item) => item.id === deleteButton.dataset.deleteProduct);
+    if (index < 0) return;
+    const [removed] = state.products.splice(index, 1);
+    if (!persistState()) {
+      state.products.splice(index, 0, removed);
+      return;
+    }
+    renderProducts();
+    showToast("Barang dihapus dari katalog.");
+  }
+});
+
+document.getElementById("transaction-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const amount = Number(form.elements.amount.value);
+  const description = form.elements.description.value.trim();
+  if (!description || !Number.isSafeInteger(amount) || amount < 1 || !form.elements.date.value) {
+    showToast("Lengkapi keterangan, jumlah, dan tanggal dengan benar.", true);
+    return;
+  }
+  const transaction = {
+    id: crypto.randomUUID(),
+    type: form.elements.type.value,
+    description,
+    amount,
+    date: form.elements.date.value,
+    createdAt: new Date().toISOString()
+  };
+  state.transactions.push(transaction);
+  if (!persistState()) {
+    state.transactions.pop();
+    return;
+  }
+  document.getElementById("transaction-dialog").close();
+  renderAll();
+  showToast("Transaksi berhasil dicatat.");
+});
+
+document.getElementById("close-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
+document.getElementById("cancel-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
+document.getElementById("cancel-product-edit").addEventListener("click", resetProductForm);
