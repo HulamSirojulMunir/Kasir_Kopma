@@ -7,6 +7,7 @@ let toastTimeout;
 let state = loadState();
 let dashboardPeriod = "day";
 let editingProductId = null;
+let saleCart = [];
 
 function localDateValue(date) {
   const year = date.getFullYear();
@@ -208,8 +209,50 @@ function openTransaction(type) {
   form.reset();
   form.elements.date.value = today;
   if (type === "income" || type === "expense") form.elements.type.value = type;
+  saleCart = [];
+  renderSaleProductOptions();
+  updateTransactionMode();
   document.getElementById("transaction-dialog").showModal();
-  form.elements.description.focus();
+  if (form.elements.type.value === "income" && document.getElementById("income-mode").value === "sale") {
+    document.getElementById("sale-product-select").focus();
+  } else {
+    form.elements.description.focus();
+  }
+}
+
+function renderSaleProductOptions() {
+  const select = document.getElementById("sale-product-select");
+  select.innerHTML = state.products.length
+    ? `<option value="">Pilih barang...</option>${[...state.products].sort((a, b) => a.name.localeCompare(b.name, "id")).map((product) => `<option value="${escapeHTML(product.id)}">${escapeHTML(product.name)} — ${currency.format(product.sellingPrice)}</option>`).join("")}`
+    : '<option value="">Belum ada barang</option>';
+  document.getElementById("sale-empty-products").hidden = state.products.length > 0;
+  document.getElementById("add-sale-item").disabled = state.products.length === 0;
+  renderSaleCart();
+}
+
+function updateTransactionMode() {
+  const type = document.getElementById("transaction-type").value;
+  const isIncome = type === "income";
+  const isSale = isIncome && document.getElementById("income-mode").value === "sale";
+  document.getElementById("income-mode-group").hidden = !isIncome;
+  document.getElementById("sale-panel").hidden = !isSale;
+  document.getElementById("transaction-manual-fields").hidden = isSale;
+  document.getElementById("transaction-description").required = !isSale;
+  document.getElementById("transaction-amount").required = !isSale;
+  renderSaleCart();
+}
+
+function renderSaleCart() {
+  const rows = document.getElementById("sale-cart-rows");
+  rows.innerHTML = saleCart.map((item) => `<tr>
+    <td>${escapeHTML(item.name)}<small class="sale-unit-price">${currency.format(item.unitPrice)} / buah</small></td>
+    <td>${item.quantity.toLocaleString("id-ID")}</td>
+    <td class="align-right">${currency.format(item.unitPrice * item.quantity)}</td>
+    <td class="align-right sale-item-actions"><button class="sale-quantity-decrease" type="button" data-decrease-sale-item="${escapeHTML(item.productId)}" aria-label="Kurangi jumlah ${escapeHTML(item.name)}">−</button><button class="product-delete" type="button" data-remove-sale-item="${escapeHTML(item.productId)}" aria-label="Hapus ${escapeHTML(item.name)} dari penjualan">×</button></td>
+  </tr>`).join("");
+  document.getElementById("sale-cart-empty").hidden = saleCart.length > 0;
+  document.querySelector(".sale-cart-table").hidden = saleCart.length === 0;
+  document.getElementById("sale-total").textContent = currency.format(saleCart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
 }
 
 function resetProductForm() {
@@ -316,9 +359,9 @@ document.getElementById("product-rows").addEventListener("click", (event) => {
     const product = state.products.find((item) => item.id === sellButton.dataset.productId);
     if (!product) return;
     openTransaction("income");
-    const form = document.getElementById("transaction-form");
-    form.elements.description.value = `Penjualan ${product.name}`;
-    form.elements.amount.value = product.sellingPrice;
+    document.getElementById("sale-product-select").value = product.id;
+    document.getElementById("sale-quantity").value = "1";
+    document.getElementById("add-sale-item").click();
   }
   if (deleteButton) {
     const index = state.products.findIndex((item) => item.id === deleteButton.dataset.deleteProduct);
@@ -336,10 +379,15 @@ document.getElementById("product-rows").addEventListener("click", (event) => {
 document.getElementById("transaction-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  const amount = Number(form.elements.amount.value);
-  const description = form.elements.description.value.trim();
-  if (!description || !Number.isSafeInteger(amount) || amount < 1 || !form.elements.date.value) {
-    showToast("Lengkapi keterangan, jumlah, dan tanggal dengan benar.", true);
+  const isSale = form.elements.type.value === "income" && form.elements.incomeMode.value === "sale";
+  const amount = isSale
+    ? saleCart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
+    : Number(form.elements.amount.value);
+  const description = isSale
+    ? `Penjualan: ${saleCart.map((item) => `${item.name} x${item.quantity}`).join(", ")}`
+    : form.elements.description.value.trim();
+  if (!description || !Number.isSafeInteger(amount) || amount < 1 || !form.elements.date.value || (isSale && saleCart.length === 0)) {
+    showToast(isSale ? "Pilih minimal satu barang untuk dicatat sebagai penjualan." : "Lengkapi keterangan, jumlah, dan tanggal dengan benar.", true);
     return;
   }
   const transaction = {
@@ -348,7 +396,8 @@ document.getElementById("transaction-form").addEventListener("submit", (event) =
     description,
     amount,
     date: form.elements.date.value,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    ...(isSale ? { items: saleCart.map((item) => ({ ...item })) } : {})
   };
   state.transactions.push(transaction);
   if (!persistState()) {
@@ -363,3 +412,56 @@ document.getElementById("transaction-form").addEventListener("submit", (event) =
 document.getElementById("close-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
 document.getElementById("cancel-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
 document.getElementById("cancel-product-edit").addEventListener("click", resetProductForm);
+document.getElementById("transaction-type").addEventListener("change", updateTransactionMode);
+document.getElementById("income-mode").addEventListener("change", updateTransactionMode);
+document.getElementById("add-sale-item").addEventListener("click", () => {
+  const product = state.products.find((item) => item.id === document.getElementById("sale-product-select").value);
+  const quantity = Number(document.getElementById("sale-quantity").value);
+  if (!product || !Number.isSafeInteger(quantity) || quantity < 1) {
+    showToast("Pilih barang dan masukkan jumlah minimal 1.", true);
+    return;
+  }
+  const existing = saleCart.find((item) => item.productId === product.id);
+  const combinedQuantity = (existing?.quantity || 0) + quantity;
+  if (!Number.isSafeInteger(combinedQuantity) || !Number.isSafeInteger(combinedQuantity * product.sellingPrice)) {
+    showToast("Jumlah barang melebihi batas yang dapat dihitung.", true);
+    return;
+  }
+  if (existing) {
+    existing.quantity = combinedQuantity;
+  } else {
+    saleCart.push({
+      productId: product.id,
+      name: product.name,
+      quantity,
+      unitPrice: product.sellingPrice,
+      buyPrice: product.buyPrice
+    });
+  }
+  const total = saleCart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  if (!Number.isSafeInteger(total)) {
+    if (existing) existing.quantity -= quantity;
+    else saleCart.pop();
+    showToast("Total penjualan melebihi batas yang dapat dihitung.", true);
+    return;
+  }
+  document.getElementById("sale-quantity").value = "1";
+  renderSaleCart();
+});
+document.getElementById("sale-cart-rows").addEventListener("click", (event) => {
+  const decreaseButton = event.target.closest("[data-decrease-sale-item]");
+  const removeButton = event.target.closest("[data-remove-sale-item]");
+  if (decreaseButton) {
+    const item = saleCart.find((entry) => entry.productId === decreaseButton.dataset.decreaseSaleItem);
+    if (!item) return;
+    item.quantity -= 1;
+    if (item.quantity === 0) {
+      saleCart = saleCart.filter((entry) => entry.productId !== item.productId);
+    }
+    renderSaleCart();
+    return;
+  }
+  if (!removeButton) return;
+  saleCart = saleCart.filter((item) => item.productId !== removeButton.dataset.removeSaleItem);
+  renderSaleCart();
+});

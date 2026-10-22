@@ -56,5 +56,32 @@ body{background:#f4f6f2}
 .product-actions .text-button{padding:4px 5px;font-size:9px}
 .cancel-edit-button{margin-top:8px}
 .cancel-edit-button[hidden]{display:none}
+.creator-credit{padding:12px 2px 0;border-top:1px solid #315441;margin-top:12px;color:#b4c7b7;font-size:9px;letter-spacing:.2px}
+.creator-credit strong{color:#f5faf5;font-weight:700;letter-spacing:1.1px}
+.sale-panel{margin-top:15px;padding:13px;border:1px solid #e6ebe5;border-radius:9px;background:#f8faf7}
+.sale-panel[hidden],#income-mode-group[hidden],#transaction-manual-fields[hidden]{display:none}
+.sale-picker-fields{display:grid;grid-template-columns:minmax(0,1fr) 86px;gap:10px}
+.sale-picker-fields .field-label{margin-top:0}
+.sale-quantity-field .input{text-align:center}
+.add-sale-button{width:100%;height:35px;margin-top:10px}
+.add-sale-button:disabled{cursor:not-allowed;opacity:.55}
+.sale-empty-note{font-size:9px;color:#a56336;margin:9px 0 0}
+.sale-cart-wrap{margin-top:13px}
+.sale-cart-table{font-size:9px}
+.sale-cart-table th{font-size:8px;color:#8a958c;padding:8px 5px}
+.sale-cart-table td{padding:8px 5px;font-size:9px}
+.sale-item-actions{white-space:nowrap}
+.sale-quantity-decrease,.sale-item-actions .product-delete{width:23px;height:23px;padding:0;border:1px solid #e3e9e2;border-radius:6px;background:#fff;color:#607166;font-size:15px;line-height:1}
+.sale-quantity-decrease:hover{border-color:#a8c9ae;background:#edf5ed;color:#236840}
+.sale-item-actions .product-delete{margin-left:4px;font-size:13px}
+.sale-item-actions .product-delete:hover{background:#fff0ed;color:#c46053}
+.sale-unit-price{display:block;margin-top:3px;color:#929d94;font-size:8px}
+.sale-cart-empty{padding:14px 8px;text-align:center;color:#929d94;font-size:9px}
+.sale-cart-empty[hidden]{display:none}
+.sale-total-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:12px;border-top:1px solid #e3e9e2;font-size:10px;color:#6f7c72}
+.sale-total-row strong{font-family:Manrope,sans-serif;font-size:15px;color:#1f6541}
 .report-tile{border-radius:12px}
 @media(max-width:760px){.product-layout{grid-template-columns:1fr}}
+.creator-credit{color:#7f9786;font-size:8px;opacity:.78}
+.creator-credit strong{color:#afc1b1;font-weight:600;letter-spacing:.7px}
+@media(max-width:760px){.sidebar-bottom{flex-direction:column;align-items:center;gap:10px}.creator-credit{border-top:0;margin:0;padding:0;text-align:center;font-size:0}.creator-credit strong{display:block;font-size:9px}}

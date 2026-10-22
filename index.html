@@ -35,6 +35,7 @@
             <div><strong>Kasir Kopma</strong><small>Pengelola toko</small></div>
             <span class="profile-dots">···</span>
           </div>
+          <div class="creator-credit">Dibuat oleh <strong>HSM</strong></div>
         </div>
       </aside>
 
@@ -146,8 +147,29 @@
       <form id="transaction-form">
         <div class="dialog-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> BUKU KAS</div><h2>Catat transaksi</h2><p>Isi detail pemasukan atau pengeluaran.</p></div><button type="button" class="dialog-close" id="close-dialog" aria-label="Tutup">×</button></div>
         <label class="field-label" for="transaction-type">Jenis transaksi</label><select id="transaction-type" class="input" name="type"><option value="income">Uang masuk</option><option value="expense">Uang keluar</option></select>
-        <label class="field-label" for="transaction-description">Keterangan</label><input id="transaction-description" class="input" name="description" placeholder="Contoh: Penjualan harian" maxlength="100" required />
-        <label class="field-label" for="transaction-amount">Jumlah</label><div class="price-input"><span>Rp</span><input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" required /></div>
+        <div id="income-mode-group">
+          <label class="field-label" for="income-mode">Jenis pemasukan</label>
+          <select id="income-mode" class="input" name="incomeMode"><option value="sale">Penjualan barang</option><option value="manual">Pemasukan lain</option></select>
+        </div>
+        <section id="sale-panel" class="sale-panel">
+          <div class="sale-picker">
+            <div class="sale-picker-fields">
+              <label class="sale-product-field"><span class="field-label">Pilih barang</span><select id="sale-product-select" class="input" aria-label="Pilih barang untuk dijual"></select></label>
+              <label class="sale-quantity-field"><span class="field-label">Jumlah</span><input id="sale-quantity" class="input" type="number" min="1" step="1" value="1" aria-label="Jumlah barang" /></label>
+            </div>
+            <button id="add-sale-item" class="button button-secondary add-sale-button" type="button">Tambah barang <span>＋</span></button>
+            <p id="sale-empty-products" class="sale-empty-note" hidden>Belum ada barang. Tambahkan dulu di menu Daftar barang.</p>
+          </div>
+          <div class="sale-cart-wrap">
+            <table class="sale-cart-table"><thead><tr><th>BARANG</th><th>JUMLAH</th><th class="align-right">SUBTOTAL</th><th></th></tr></thead><tbody id="sale-cart-rows"></tbody></table>
+            <div class="sale-cart-empty" id="sale-cart-empty">Barang yang dipilih akan muncul di sini.</div>
+          </div>
+          <div class="sale-total-row"><span>Total pemasukan</span><strong id="sale-total">Rp0</strong></div>
+        </section>
+        <div id="transaction-manual-fields">
+          <label class="field-label" for="transaction-description">Keterangan</label><input id="transaction-description" class="input" name="description" placeholder="Contoh: Belanja stok atau pemasukan lain" maxlength="100" />
+          <label class="field-label" for="transaction-amount">Jumlah</label><div class="price-input"><span>Rp</span><input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" /></div>
+        </div>
         <label class="field-label" for="transaction-date">Tanggal</label><input id="transaction-date" class="input" name="date" type="date" required />
         <div class="dialog-actions"><button type="button" class="button button-secondary" id="cancel-dialog">Batal</button><button class="button button-primary" type="submit">Simpan transaksi <span>→</span></button></div>
       </form>
