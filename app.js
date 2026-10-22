@@ -1,4 +1,7 @@
 const STORAGE_KEY = "kopma-kasir-data-v1";
+const SYNC_SETTINGS_KEY = "kopma-kasir-google-sheets-v1";
+const SHEETS_MARKER = "KOPMA_KASIR_V1";
+const SHEETS_API_URL = "https://sheets.googleapis.com/v4/spreadsheets";
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -8,6 +11,11 @@ let state = loadState();
 let dashboardPeriod = "day";
 let editingProductId = null;
 let saleCart = [];
+let googleAccessToken = null;
+let googleTokenExpiresAt = 0;
+let googleTokenClient = null;
+let syncConfig = loadSyncConfig();
+let syncUploadQueue = Promise.resolve();
 
 function localDateValue(date) {
   const year = date.getFullYear();
@@ -18,17 +26,7 @@ function localDateValue(date) {
 
 function loadState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    const products = Array.isArray(saved.products) ? saved.products : [];
-    const transactions = Array.isArray(saved.transactions) ? saved.transactions : [];
-    return {
-      products: products.filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && Number.isFinite(item.sellingPrice ?? item.price) && (item.sellingPrice ?? item.price) > 0).map((item) => ({
-        ...item,
-        sellingPrice: item.sellingPrice ?? item.price,
-        buyPrice: Number.isSafeInteger(item.buyPrice) && item.buyPrice >= 0 ? item.buyPrice : null
-      })),
-      transactions: transactions.filter((item) => item && typeof item.id === "string" && typeof item.description === "string" && ["income", "expense"].includes(item.type) && Number.isFinite(item.amount) && item.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date))
-    };
+    return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"));
   } catch (error) {
     console.error("Data kasir tidak dapat dibaca dari penyimpanan browser.", error);
     window.addEventListener("DOMContentLoaded", () => showToast("Data tersimpan tidak dapat dibaca. Silakan periksa penyimpanan browser.", true), { once: true });
@@ -36,14 +34,263 @@ function loadState() {
   }
 }
 
+function normalizeState(saved) {
+  const products = Array.isArray(saved?.products) ? saved.products : [];
+  const transactions = Array.isArray(saved?.transactions) ? saved.transactions : [];
+  return {
+    products: products.filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && Number.isFinite(item.sellingPrice ?? item.price) && (item.sellingPrice ?? item.price) > 0).map((item) => ({
+      ...item,
+      sellingPrice: item.sellingPrice ?? item.price,
+      buyPrice: Number.isSafeInteger(item.buyPrice) && item.buyPrice >= 0 ? item.buyPrice : null
+    })),
+    transactions: transactions.filter((item) => item && typeof item.id === "string" && typeof item.description === "string" && ["income", "expense"].includes(item.type) && Number.isFinite(item.amount) && item.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date))
+  };
+}
+
+function loadSyncConfig() {
+  try {
+    const settings = JSON.parse(localStorage.getItem(SYNC_SETTINGS_KEY) || "null");
+    return settings && typeof settings.clientId === "string" && typeof settings.spreadsheetId === "string" ? settings : null;
+  } catch (error) {
+    console.error("Pengaturan Google Sheets tidak dapat dibaca.", error);
+    return null;
+  }
+}
+
 function persistState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (googleAccessToken && syncConfig) scheduleRemoteSave();
     return true;
   } catch (error) {
     console.error("Data kasir gagal disimpan ke penyimpanan browser.", error);
     showToast("Data gagal disimpan. Periksa ruang penyimpanan browser.", true);
     return false;
+  }
+}
+
+function setSyncStatus(message, isError = false) {
+  const status = document.getElementById("sync-status");
+  if (status) {
+    status.textContent = message;
+    status.classList.toggle("sync-status-error", isError);
+  }
+  const button = document.getElementById("sync-settings-button");
+  if (button) {
+    button.querySelector("span:last-child").textContent = googleAccessToken ? "Sheets terhubung" : "Hubungkan Sheets";
+    button.classList.toggle("is-connected", Boolean(googleAccessToken));
+  }
+}
+
+function saveSyncConfig() {
+  const clientId = document.getElementById("google-client-id").value.trim();
+  const spreadsheetId = document.getElementById("google-sheet-id").value.trim();
+  if (!clientId.endsWith(".apps.googleusercontent.com") || !spreadsheetId || /[^a-zA-Z0-9_-]/.test(spreadsheetId)) {
+    showToast("Isi Google OAuth Client ID dan ID Spreadsheet dengan benar.", true);
+    return false;
+  }
+  const updatedConfig = { clientId, spreadsheetId };
+  try {
+    localStorage.setItem(SYNC_SETTINGS_KEY, JSON.stringify(updatedConfig));
+    if (syncConfig?.clientId !== clientId || syncConfig?.spreadsheetId !== spreadsheetId) {
+      googleAccessToken = null;
+      googleTokenExpiresAt = 0;
+      googleTokenClient = null;
+    }
+    syncConfig = updatedConfig;
+    setSyncStatus(googleAccessToken ? "Terhubung ke Google Sheets." : "Pengaturan tersimpan; login Google untuk menyinkronkan.");
+    showToast("Pengaturan Google Sheets berhasil disimpan.");
+    return true;
+  } catch (error) {
+    console.error("Pengaturan Google Sheets gagal disimpan.", error);
+    showToast("Pengaturan gagal disimpan di browser.", true);
+    return false;
+  }
+}
+
+async function getGoogleAccessToken() {
+  if (!syncConfig) throw new Error("Isi dan simpan Client ID serta ID Spreadsheet terlebih dahulu.");
+  if (googleAccessToken && googleTokenExpiresAt > Date.now() + 60000) return googleAccessToken;
+  let attempts = 0;
+  while (!window.google?.accounts?.oauth2 && attempts < 50) {
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+    attempts += 1;
+  }
+  if (!window.google?.accounts?.oauth2) throw new Error("Layanan login Google belum termuat. Periksa koneksi internet lalu muat ulang halaman.");
+  return new Promise((resolve, reject) => {
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: syncConfig.clientId,
+      scope: "https://www.googleapis.com/auth/spreadsheets",
+      callback: (response) => {
+        if (response.error || !response.access_token) {
+          reject(new Error(response.error_description || response.error || "Login Google tidak berhasil."));
+          return;
+        }
+        googleAccessToken = response.access_token;
+        googleTokenExpiresAt = Date.now() + (Number(response.expires_in) || 3600) * 1000;
+        setSyncStatus("Login Google berhasil; pilih ambil atau kirim data.");
+        resolve(googleAccessToken);
+      },
+      error_callback: (error) => reject(new Error(error.message || "Jendela login Google tidak berhasil dibuka."))
+    });
+    googleTokenClient = tokenClient;
+    tokenClient.requestAccessToken({ prompt: "" });
+  });
+}
+
+async function sheetsRequest(path, options = {}) {
+  const token = await getGoogleAccessToken();
+  const response = await fetch(`${SHEETS_API_URL}/${encodeURIComponent(syncConfig.spreadsheetId)}/values/${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+  if (!response.ok) {
+    let details = "";
+    try {
+      const result = await response.json();
+      details = result.error?.message || "";
+    } catch (error) {
+      console.error("Rincian kesalahan Google Sheets tidak dapat dibaca.", error);
+    }
+    if (response.status === 401) {
+      googleAccessToken = null;
+      googleTokenExpiresAt = 0;
+    }
+    throw new Error(details || `Google Sheets menolak permintaan (${response.status}). Pastikan Sheets API aktif dan akunmu memiliki akses ke spreadsheet.`);
+  }
+  return response.json();
+}
+
+async function readRemoteState() {
+  const result = await sheetsRequest("A1%3AA2");
+  const values = result.values || [];
+  if (!values.length || !values[0]?.[0]) return null;
+  if (values[0][0] !== SHEETS_MARKER || typeof values[1]?.[0] !== "string") {
+    throw new Error("Sheet ini sudah berisi data lain atau belum disiapkan Kopma Kasir. Gunakan spreadsheet kosong khusus untuk aplikasi.");
+  }
+  let remote;
+  try {
+    remote = normalizeState(JSON.parse(values[1][0]));
+  } catch (error) {
+    console.error("Data pada Google Sheets tidak valid.", error);
+    throw new Error("Data kasir di Sheet tidak dapat dibaca. Data lokal tidak diubah.");
+  }
+  return remote;
+}
+
+async function writeRemoteState(snapshot) {
+  const data = JSON.stringify(snapshot);
+  if (data.length > 45000) throw new Error("Data terlalu besar untuk satu sel Google Sheets. Hubungi saya untuk metode penyimpanan lain.");
+  const body = { values: [[SHEETS_MARKER], [data]] };
+  await sheetsRequest("A1%3AA2?valueInputOption=RAW", { method: "PUT", body: JSON.stringify(body) });
+}
+
+function scheduleRemoteSave() {
+  const snapshot = JSON.parse(JSON.stringify(state));
+  syncUploadQueue = syncUploadQueue
+    .then(() => writeRemoteState(snapshot))
+    .then(() => setSyncStatus("Perubahan terakhir tersimpan ke Google Sheets."))
+    .catch((error) => {
+      console.error("Perubahan tidak dapat disinkronkan ke Google Sheets.", error);
+      setSyncStatus(error.message, true);
+      showToast(`Data lokal tersimpan, tetapi sinkronisasi gagal: ${error.message}`, true);
+    });
+}
+
+async function connectGoogleSheets() {
+  if (!saveSyncConfig()) return;
+  try {
+    await getGoogleAccessToken();
+  } catch (error) {
+    console.error("Login Google gagal.", error);
+    setSyncStatus(error.message, true);
+    showToast(error.message, true);
+  }
+}
+
+async function uploadToGoogleSheets() {
+  if (!saveSyncConfig()) return;
+  try {
+    const remote = await readRemoteState();
+    const hasRemoteData = remote && (remote.products.length || remote.transactions.length);
+    if (hasRemoteData && !window.confirm("Google Sheet sudah memiliki data. Ganti seluruh data Sheet dengan data pada perangkat ini?")) return;
+    await writeRemoteState(state);
+    setSyncStatus("Data perangkat ini berhasil dikirim ke Google Sheets.");
+    showToast("Data berhasil dikirim ke Google Sheets.");
+  } catch (error) {
+    console.error("Data gagal dikirim ke Google Sheets.", error);
+    setSyncStatus(error.message, true);
+    showToast(error.message, true);
+  }
+}
+
+async function downloadFromGoogleSheets() {
+  if (!saveSyncConfig()) return;
+  try {
+    const remote = await readRemoteState();
+    if (!remote) throw new Error("Sheet belum berisi data kasir. Isi data dari laptop lalu pilih Kirim ke Sheet terlebih dahulu.");
+    const hasLocalData = state.products.length || state.transactions.length;
+    if (hasLocalData && !window.confirm("Data lokal pada perangkat ini akan diganti dengan data dari Google Sheets. Lanjutkan?")) return;
+    state = remote;
+    if (!persistState()) throw new Error("Data Sheet terbaca, tetapi gagal disimpan di browser perangkat ini.");
+    renderAll();
+    setSyncStatus("Data berhasil diambil dari Google Sheets.");
+    showToast("Data dari Google Sheets berhasil dimuat.");
+  } catch (error) {
+    console.error("Data gagal diambil dari Google Sheets.", error);
+    setSyncStatus(error.message, true);
+    showToast(error.message, true);
+  }
+}
+
+function exportLocalBackup() {
+  const backup = {
+    format: "kopma-kasir-backup",
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    data: state
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `kopma-kasir-backup-${today}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast("Cadangan barang dan transaksi berhasil diunduh.");
+}
+
+async function importLocalBackup(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("Berkas cadangan terlalu besar untuk diimpor.", true);
+    return;
+  }
+  try {
+    const backup = JSON.parse(await file.text());
+    if (backup?.format !== "kopma-kasir-backup" || backup.schemaVersion !== 1 || !Array.isArray(backup.data?.products) || !Array.isArray(backup.data?.transactions)) {
+      throw new Error("Format cadangan tidak dikenali atau berkasnya tidak lengkap.");
+    }
+    const imported = normalizeState(backup.data);
+    if (imported.products.length !== backup.data.products.length || imported.transactions.length !== backup.data.transactions.length) {
+      throw new Error("Sebagian data pada cadangan tidak valid; data perangkat tidak diubah.");
+    }
+    if (!window.confirm(`Pulihkan ${imported.products.length} barang dan ${imported.transactions.length} transaksi? Data saat ini di perangkat ini akan diganti.`)) return;
+    const previousState = state;
+    state = imported;
+    if (!persistState()) {
+      state = previousState;
+      return;
+    }
+    renderAll();
+    showToast("Cadangan berhasil dipulihkan ke perangkat ini.");
+  } catch (error) {
+    console.error("Cadangan kasir tidak dapat dipulihkan.", error);
+    showToast(error.message || "Berkas cadangan tidak dapat dibaca.", true);
   }
 }
 
@@ -412,6 +659,25 @@ document.getElementById("transaction-form").addEventListener("submit", (event) =
 document.getElementById("close-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
 document.getElementById("cancel-dialog").addEventListener("click", () => document.getElementById("transaction-dialog").close());
 document.getElementById("cancel-product-edit").addEventListener("click", resetProductForm);
+document.getElementById("sync-settings-button").addEventListener("click", () => {
+  document.getElementById("google-client-id").value = syncConfig?.clientId || "";
+  document.getElementById("google-sheet-id").value = syncConfig?.spreadsheetId || "";
+  setSyncStatus(googleAccessToken ? "Terhubung ke Google Sheets." : syncConfig ? "Pengaturan tersimpan; login Google untuk menyinkronkan." : "Belum terhubung.");
+  document.getElementById("sync-dialog").showModal();
+});
+document.getElementById("sync-settings-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveSyncConfig();
+});
+document.getElementById("sync-connect").addEventListener("click", connectGoogleSheets);
+document.getElementById("sync-upload").addEventListener("click", uploadToGoogleSheets);
+document.getElementById("sync-download").addEventListener("click", downloadFromGoogleSheets);
+document.getElementById("export-data").addEventListener("click", exportLocalBackup);
+document.getElementById("import-data").addEventListener("change", (event) => {
+  importLocalBackup(event.currentTarget.files[0]);
+  event.currentTarget.value = "";
+});
+document.getElementById("close-sync-dialog").addEventListener("click", () => document.getElementById("sync-dialog").close());
 document.getElementById("transaction-type").addEventListener("change", updateTransactionMode);
 document.getElementById("income-mode").addEventListener("change", updateTransactionMode);
 document.getElementById("add-sale-item").addEventListener("click", () => {

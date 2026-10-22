@@ -44,6 +44,7 @@
           <div class="breadcrumb"><span>Kopma Kasir</span><span class="crumb-separator">/</span><strong id="page-crumb">Ringkasan</strong></div>
           <div class="topbar-right">
             <span class="today-pill"><span class="live-dot"></span><span id="today-label"></span></span>
+            <button id="sync-settings-button" class="sync-settings-button" type="button" aria-label="Pengaturan Google Sheets"><span class="sync-dot"></span><span>Hubungkan Sheets</span></button>
             <div class="top-avatar">K</div>
           </div>
         </header>
@@ -174,6 +175,37 @@
         <div class="dialog-actions"><button type="button" class="button button-secondary" id="cancel-dialog">Batal</button><button class="button button-primary" type="submit">Simpan transaksi <span>→</span></button></div>
       </form>
     </dialog>
+    <dialog id="sync-dialog" class="transaction-dialog sync-dialog">
+      <form id="sync-settings-form">
+        <div class="dialog-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> SINKRONISASI PRIBADI</div><h2>Simpan di Google Sheets</h2><p>Hubungkan Sheet pribadimu agar barang dan transaksi bisa dibuka dari laptop maupun HP.</p></div><button type="button" class="dialog-close" id="close-sync-dialog" aria-label="Tutup">×</button></div>
+        <details class="sync-setup">
+          <summary>Belum punya Client ID? Lihat cara menyiapkannya</summary>
+          <ol>
+            <li>Buat project di <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>, lalu aktifkan <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer">Google Sheets API</a>.</li>
+            <li>Atur Google Auth Platform / OAuth consent screen untuk akun pribadi dan tambahkan akun Google-mu sebagai test user bila diminta.</li>
+            <li>Buat OAuth Client ID jenis <strong>Web application</strong>. Pada Authorized JavaScript origins, tambahkan <code>https://kasir-kopma.vercel.app</code>. Client ID bukan password; jangan pernah masukkan client secret di sini.</li>
+            <li>Buat Google Spreadsheet pribadi yang kosong. Dari tautannya, salin ID di antara <code>/d/</code> dan <code>/edit</code>.</li>
+          </ol>
+        </details>
+        <label class="field-label" for="google-client-id">Google OAuth Client ID</label><input id="google-client-id" class="input" type="text" autocomplete="off" placeholder="...apps.googleusercontent.com" required />
+        <label class="field-label" for="google-sheet-id">ID Google Spreadsheet</label><input id="google-sheet-id" class="input" type="text" autocomplete="off" placeholder="ID dari tautan docs.google.com/spreadsheets/d/..." required />
+        <button class="button button-secondary button-wide sync-save-button" type="submit">Simpan pengaturan</button>
+        <div class="sync-info"><strong>Status:</strong> <span id="sync-status">Belum terhubung</span><br />Setiap perangkat perlu pengaturan ini sendiri dan login dengan akun Google yang sama.</div>
+        <div class="sync-actions">
+          <button class="button button-secondary" id="sync-connect" type="button">Login Google</button>
+          <button class="button button-secondary" id="sync-download" type="button">Ambil dari Sheet</button>
+          <button class="button button-primary" id="sync-upload" type="button">Kirim ke Sheet</button>
+        </div>
+        <div class="backup-actions">
+          <button class="button button-secondary" id="export-data" type="button">Unduh cadangan perangkat ini</button>
+          <label class="button button-secondary import-backup-button" for="import-data">Pulihkan cadangan</label>
+          <input id="import-data" type="file" accept="application/json,.json" hidden />
+        </div>
+        <p class="sync-warning">Jangan bagikan tautan atau akses Sheet kepada orang lain. Data laptop baru dikirim ke Sheet setelah memilih “Kirim ke Sheet”. Di HP, pilih “Ambil dari Sheet” untuk memuat data yang sama.</p>
+        <p class="sync-warning">Untuk memindahkan data dari aplikasi file lokal ke situs Vercel, unduh cadangan di sini, buka situs Vercel, lalu pilih “Pulihkan cadangan”. Berkas cadangan hanya berisi barang dan transaksi, bukan pengaturan Google.</p>
+      </form>
+    </dialog>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="app.js"></script>
   </body>
 </html>
