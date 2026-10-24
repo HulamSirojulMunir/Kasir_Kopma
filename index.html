@@ -170,10 +170,22 @@
         <div id="transaction-manual-fields">
           <label class="field-label" for="transaction-description">Keterangan</label><input id="transaction-description" class="input" name="description" placeholder="Contoh: Belanja stok atau pemasukan lain" maxlength="100" />
           <label class="field-label" for="transaction-amount">Jumlah</label><div class="price-input"><span>Rp</span><input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" /></div>
+          <section id="expense-receipt-panel" class="receipt-panel" hidden>
+            <span class="field-label">Foto nota belanja <span class="field-hint">Opsional</span></span>
+            <p class="receipt-help">Foto diproses di perangkat ini; koneksi internet diperlukan untuk memuat pembaca nota. Nominal bisa kamu periksa sebelum disimpan.</p>
+            <input id="receipt-file" type="file" accept="image/*" capture="environment" hidden />
+            <div class="receipt-actions"><button id="choose-receipt" class="button button-secondary" type="button">📷 Foto / pilih nota</button><button id="scan-receipt" class="button button-secondary" type="button" disabled>Baca total nota</button><button id="remove-receipt" class="text-button" type="button" hidden>Hapus foto</button></div>
+            <img id="receipt-preview" class="receipt-preview" alt="Pratinjau foto nota" hidden />
+            <p id="receipt-status" class="receipt-status" role="status" aria-live="polite">Foto nota tersimpan di perangkat ini, tidak ikut tersinkron ke Google Sheets.</p>
+          </section>
         </div>
         <label class="field-label" for="transaction-date">Tanggal</label><input id="transaction-date" class="input" name="date" type="date" required />
         <div class="dialog-actions"><button type="button" class="button button-secondary" id="cancel-dialog">Batal</button><button class="button button-primary" type="submit">Simpan transaksi <span>→</span></button></div>
       </form>
+    </dialog>
+    <dialog id="receipt-dialog" class="transaction-dialog receipt-dialog">
+      <div class="dialog-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> NOTA BELANJA</div><h2>Foto nota</h2></div><button type="button" class="dialog-close" id="close-receipt-dialog" aria-label="Tutup">×</button></div>
+      <img id="receipt-view-image" class="receipt-view-image" alt="Foto nota belanja" />
     </dialog>
     <dialog id="sync-dialog" class="transaction-dialog sync-dialog">
       <form id="sync-settings-form">

@@ -102,6 +102,17 @@ body{background:#f4f6f2}
 .sync-save-button{margin-top:16px}
 .sync-warning{font-size:9px;color:#8c968e;line-height:1.6;margin:12px 0 0}
 .report-tile{border-radius:12px}
+.receipt-panel{margin-top:14px;padding:12px;border:1px solid #e6ebe5;border-radius:9px;background:#f8faf7}
+.receipt-panel[hidden]{display:none}
+.receipt-help,.receipt-status{margin:5px 0 9px;color:#829087;font-size:9px;line-height:1.5}
+.receipt-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.receipt-actions .button{height:32px;padding:0 10px;font-size:9px}
+.receipt-actions .text-button{border:0;background:none;color:#a95549;font-size:9px}
+.receipt-preview{display:block;max-width:100%;max-height:180px;margin-top:10px;border:1px solid #e0e6df;border-radius:7px;object-fit:contain;background:#fff}
+.receipt-preview[hidden]{display:none}
+.receipt-view-button{display:block;margin:3px 0 0 31px;padding:0;border:0;background:transparent;color:#28764b;font-size:9px;text-decoration:underline}
+.receipt-dialog{width:min(560px,calc(100vw - 32px))}
+.receipt-view-image{display:block;width:100%;max-height:70vh;object-fit:contain}
 @media(max-width:760px){.product-layout{grid-template-columns:1fr}}
 .creator-credit{color:#7f9786;font-size:8px;opacity:.78}
 .creator-credit strong{color:#afc1b1;font-weight:600;letter-spacing:.7px}

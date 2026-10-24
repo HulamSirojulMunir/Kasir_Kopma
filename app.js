@@ -11,6 +11,9 @@ let state = loadState();
 let dashboardPeriod = "day";
 let editingProductId = null;
 let saleCart = [];
+let receiptImage = null;
+let receiptOcrWorker = null;
+let tesseractLoadPromise = null;
 let googleAccessToken = null;
 let googleTokenExpiresAt = 0;
 let googleTokenClient = null;
@@ -43,7 +46,10 @@ function normalizeState(saved) {
       sellingPrice: item.sellingPrice ?? item.price,
       buyPrice: Number.isSafeInteger(item.buyPrice) && item.buyPrice >= 0 ? item.buyPrice : null
     })),
-    transactions: transactions.filter((item) => item && typeof item.id === "string" && typeof item.description === "string" && ["income", "expense"].includes(item.type) && Number.isFinite(item.amount) && item.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date))
+    transactions: transactions.filter((item) => item && typeof item.id === "string" && typeof item.description === "string" && ["income", "expense"].includes(item.type) && Number.isFinite(item.amount) && item.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date)).map((item) => ({
+      ...item,
+      ...(typeof item.receiptImage === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(item.receiptImage) ? { receiptImage: item.receiptImage } : {})
+    }))
   };
 }
 
@@ -183,7 +189,11 @@ async function readRemoteState() {
 }
 
 async function writeRemoteState(snapshot) {
-  const data = JSON.stringify(snapshot);
+  const remoteSnapshot = {
+    ...snapshot,
+    transactions: snapshot.transactions.map(({ receiptImage: _receiptImage, ...transaction }) => transaction)
+  };
+  const data = JSON.stringify(remoteSnapshot);
   if (data.length > 45000) throw new Error("Data terlalu besar untuk satu sel Google Sheets. Hubungi saya untuk metode penyimpanan lain.");
   const body = { values: [[SHEETS_MARKER], [data]] };
   await sheetsRequest("A1%3AA2?valueInputOption=RAW", { method: "PUT", body: JSON.stringify(body) });
@@ -376,7 +386,7 @@ function transactionRow(item) {
   const income = item.type === "income";
   const type = income ? "income" : "expense";
   return `<tr>
-    <td><div class="transaction-name"><span class="transaction-icon ${type}">${income ? "↗" : "↙"}</span>${escapeHTML(item.description)}</div></td>
+    <td><div class="transaction-name"><span class="transaction-icon ${type}">${income ? "↗" : "↙"}</span>${escapeHTML(item.description)}${item.receiptImage ? `<button class="receipt-view-button" type="button" data-view-receipt="${escapeHTML(item.id)}">Lihat nota</button>` : ""}</div></td>
     <td><span class="type-badge ${type}"><span>${income ? "↗" : "↙"}</span>${income ? "Uang masuk" : "Uang keluar"}</span></td>
     <td>${formatDate(item.date)}</td>
     <td class="align-right ${income ? "amount-in" : "amount-out"}">${income ? "+" : "−"}${currency.format(item.amount)}</td>
@@ -454,6 +464,8 @@ function renderAll() {
 function openTransaction(type) {
   const form = document.getElementById("transaction-form");
   form.reset();
+  receiptImage = null;
+  resetReceiptPreview();
   form.elements.date.value = today;
   if (type === "income" || type === "expense") form.elements.type.value = type;
   saleCart = [];
@@ -484,9 +496,126 @@ function updateTransactionMode() {
   document.getElementById("income-mode-group").hidden = !isIncome;
   document.getElementById("sale-panel").hidden = !isSale;
   document.getElementById("transaction-manual-fields").hidden = isSale;
+  document.getElementById("expense-receipt-panel").hidden = !(!isSale && !isIncome);
   document.getElementById("transaction-description").required = !isSale;
   document.getElementById("transaction-amount").required = !isSale;
   renderSaleCart();
+}
+
+function resetReceiptPreview() {
+  const preview = document.getElementById("receipt-preview");
+  preview.removeAttribute("src");
+  preview.hidden = true;
+  document.getElementById("scan-receipt").disabled = true;
+  document.getElementById("remove-receipt").hidden = true;
+  document.getElementById("receipt-status").textContent = "Foto nota tersimpan di perangkat ini, tidak ikut tersinkron ke Google Sheets.";
+}
+
+function resizeReceiptImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Foto nota tidak dapat diproses di browser ini."));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Foto nota tidak dapat dibuka. Coba gunakan foto JPG, PNG, atau WebP."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function findReceiptTotal(text) {
+  const candidates = [];
+  for (const line of text.split(/\r?\n/)) {
+    const normalized = line.toLocaleLowerCase("id").replace(/\s+/g, " ").trim();
+    if (!normalized || /subtotal|sub total|kembali|change|tunai|cash|diskon|discount|ppn|pajak|tax/.test(normalized)) continue;
+    const matches = [...normalized.matchAll(/(?:rp\.?\s*)?(\d[\d.,\s]{0,15}\d|\d)/gi)];
+    let score = 0;
+    if (/grand\s*total|total\s*(?:belanja|pembayaran|bayar|tagihan)|jumlah\s*total/.test(normalized)) score = 4;
+    else if (/\btotal\b/.test(normalized)) score = 3;
+    else if (/\btagihan\b|\bbayar\b/.test(normalized)) score = 2;
+    if (!score || !matches.length) continue;
+    const amountText = matches[matches.length - 1][1].replace(/\s/g, "").replace(/[.,]\d{2}$/, "");
+    const amount = Number(amountText.replace(/[^\d]/g, ""));
+    if (Number.isSafeInteger(amount) && amount > 0) candidates.push({ amount, score });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]?.amount ?? null;
+}
+
+function openReceiptFromEvent(event) {
+  const button = event.target.closest("[data-view-receipt]");
+  if (!button) return;
+  const transaction = state.transactions.find((item) => item.id === button.dataset.viewReceipt);
+  if (!transaction?.receiptImage) return;
+  document.getElementById("receipt-view-image").src = transaction.receiptImage;
+  document.getElementById("receipt-dialog").showModal();
+}
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tesseractLoadPromise) {
+    tesseractLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => {
+        tesseractLoadPromise = null;
+        reject(new Error("Pembaca nota tidak dapat dimuat. Periksa koneksi internet lalu coba lagi."));
+      };
+      document.head.append(script);
+    });
+  }
+  return tesseractLoadPromise;
+}
+
+async function scanReceipt() {
+  const status = document.getElementById("receipt-status");
+  const scanButton = document.getElementById("scan-receipt");
+  scanButton.disabled = true;
+  status.textContent = "Sedang membaca tulisan pada nota...";
+  try {
+    const tesseract = await loadTesseract();
+    if (!receiptOcrWorker) {
+      receiptOcrWorker = await tesseract.createWorker("ind", 1, {
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+        logger: (message) => {
+          if (message.status === "recognizing text") status.textContent = `Membaca nota... ${Math.round(message.progress * 100)}%`;
+        }
+      });
+    }
+    const result = await receiptOcrWorker.recognize(receiptImage);
+    const amount = findReceiptTotal(result.data.text);
+    if (!amount) {
+      status.textContent = "Total belum terbaca. Isi jumlah secara manual atau foto ulang nota dengan lebih jelas.";
+      showToast("Total nota tidak terdeteksi. Silakan periksa dan isi jumlahnya sendiri.", true);
+      return;
+    }
+    document.getElementById("transaction-amount").value = amount;
+    if (!document.getElementById("transaction-description").value.trim()) {
+      document.getElementById("transaction-description").value = "Belanja dari nota";
+    }
+    status.textContent = `Terbaca ${currency.format(amount)}. Periksa nominal sebelum menyimpan.`;
+  } catch (error) {
+    console.error("Foto nota tidak dapat dibaca.", error);
+    status.textContent = error.message || "Nota gagal dibaca. Isi jumlah secara manual.";
+    showToast(error.message || "Nota gagal dibaca. Isi jumlah secara manual.", true);
+  } finally {
+    scanButton.disabled = false;
+  }
 }
 
 function renderSaleCart() {
@@ -644,6 +773,7 @@ document.getElementById("transaction-form").addEventListener("submit", (event) =
     amount,
     date: form.elements.date.value,
     createdAt: new Date().toISOString(),
+    ...(form.elements.type.value === "expense" && receiptImage ? { receiptImage } : {}),
     ...(isSale ? { items: saleCart.map((item) => ({ ...item })) } : {})
   };
   state.transactions.push(transaction);
@@ -680,6 +810,40 @@ document.getElementById("import-data").addEventListener("change", (event) => {
 document.getElementById("close-sync-dialog").addEventListener("click", () => document.getElementById("sync-dialog").close());
 document.getElementById("transaction-type").addEventListener("change", updateTransactionMode);
 document.getElementById("income-mode").addEventListener("change", updateTransactionMode);
+document.getElementById("choose-receipt").addEventListener("click", () => document.getElementById("receipt-file").click());
+document.getElementById("receipt-file").addEventListener("change", async (event) => {
+  const file = event.currentTarget.files[0];
+  event.currentTarget.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/") || file.size > 15 * 1024 * 1024) {
+    showToast("Pilih foto nota yang valid dengan ukuran maksimal 15 MB.", true);
+    return;
+  }
+  const status = document.getElementById("receipt-status");
+  status.textContent = "Menyiapkan foto nota...";
+  try {
+    receiptImage = await resizeReceiptImage(file);
+    const preview = document.getElementById("receipt-preview");
+    preview.src = receiptImage;
+    preview.hidden = false;
+    document.getElementById("scan-receipt").disabled = false;
+    document.getElementById("remove-receipt").hidden = false;
+    status.textContent = "Foto siap. Tekan “Baca total nota”, lalu periksa nominalnya.";
+  } catch (error) {
+    receiptImage = null;
+    resetReceiptPreview();
+    console.error("Foto nota tidak dapat disiapkan.", error);
+    showToast(error.message || "Foto nota tidak dapat diproses.", true);
+  }
+});
+document.getElementById("remove-receipt").addEventListener("click", () => {
+  receiptImage = null;
+  resetReceiptPreview();
+});
+document.getElementById("scan-receipt").addEventListener("click", scanReceipt);
+document.getElementById("transaction-rows").addEventListener("click", openReceiptFromEvent);
+document.getElementById("recent-transactions").addEventListener("click", openReceiptFromEvent);
+document.getElementById("close-receipt-dialog").addEventListener("click", () => document.getElementById("receipt-dialog").close());
 document.getElementById("add-sale-item").addEventListener("click", () => {
   const product = state.products.find((item) => item.id === document.getElementById("sale-product-select").value);
   const quantity = Number(document.getElementById("sale-quantity").value);
