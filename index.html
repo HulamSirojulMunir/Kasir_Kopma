@@ -131,7 +131,23 @@
         </section>
 
         <section class="view" id="view-reports">
-          <div class="page-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> REKAP KEUANGAN</div><h1>Laporan bulanan</h1><p>Lihat ringkasan kas berdasarkan bulan pilihan.</p></div><label class="period-field report-period"><span>Pilih bulan</span><input id="report-month" type="month" /></label></div>
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> REKAP KEUANGAN</div><h1>Laporan bulanan</h1><p>Lihat ringkasan kas berdasarkan bulan pilihan.</p></div>
+            <div class="report-heading-actions">
+              <label class="period-field report-period"><span>Pilih bulan</span><input id="report-month" type="month" /></label>
+              <button class="button button-secondary print-button" id="print-report-button" type="button" aria-label="Cetak laporan bulanan">
+                <span class="button-icon">🖨</span> Cetak laporan
+              </button>
+            </div>
+          </div>
+          <div class="print-only print-header">
+            <div class="print-brand">Kopma Kasir — Keuangan Koperasi</div>
+            <h1 class="print-title">LAPORAN KEUANGAN BULANAN</h1>
+            <div class="print-meta">
+              <span>Periode: <strong id="print-period-label">-</strong></span>
+              <span>Tanggal Cetak: <strong id="print-date-label">-</strong></span>
+            </div>
+          </div>
           <div class="report-summary">
             <article class="report-tile"><span>Total pemasukan</span><strong class="report-income" id="report-income">Rp0</strong></article>
             <article class="report-tile"><span>Total pengeluaran</span><strong class="report-expense" id="report-expense">Rp0</strong></article>
@@ -142,6 +158,21 @@
             <div class="table-wrap"><table><thead><tr><th>TANGGAL</th><th class="align-right">PEMASUKAN</th><th class="align-right">PENGELUARAN</th><th class="align-right">SELISIH</th><th class="align-right">TRANSAKSI</th></tr></thead><tbody id="report-rows"></tbody></table></div>
             <div class="empty-state" id="reports-empty"><span class="empty-icon">▥</span><strong>Belum ada data bulan ini</strong><p>Transaksi harian akan dirangkum otomatis di sini.</p></div>
           </article>
+          <div class="print-only print-signatures">
+            <div class="signature-box">
+              <span>Dibuat Oleh,</span>
+              <div class="signature-line"></div>
+              <strong>Kasir Kopma</strong>
+            </div>
+            <div class="signature-box">
+              <span>Mengetahui,</span>
+              <div class="signature-line"></div>
+              <strong>Pengurus Koperasi</strong>
+            </div>
+          </div>
+          <div class="print-only print-footer">
+            Dokumen ini dicetak otomatis dari sistem Kopma Kasir • Dibuat oleh HSM
+          </div>
         </section>
         <div class="mobile-creator-credit">Dibuat oleh <strong>HSM</strong></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -117,6 +117,41 @@ body{background:#f4f6f2}
 .creator-credit{color:#7f9786;font-size:8px;opacity:.78}
 .creator-credit strong{color:#afc1b1;font-weight:600;letter-spacing:.7px}
 
+.report-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.print-button {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 7px;
+  border: 1px solid #d4ddd5;
+  background: #ffffff;
+  color: #244b36;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.print-button:hover {
+  background: #edf5ee;
+  border-color: #9cbda2;
+  color: #17482d;
+}
+
+.print-button .button-icon {
+  font-size: 13px;
+}
+
+.print-only {
+  display: none !important;
+}
+
 /* ================================================================
    RESPONSIVE MOBILE / ANDROID OPTIMIZATIONS (<= 768px)
    ================================================================ */
@@ -728,6 +763,13 @@ body{background:#f4f6f2}
   /* -------------------------------------------------------------
      REPORTS (Laporan)
      ------------------------------------------------------------- */
+  .report-heading-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
   .report-period {
     width: 100%;
     display: flex;
@@ -742,6 +784,14 @@ body{background:#f4f6f2}
     height: 38px;
     font-size: 13px;
     border-radius: 8px;
+  }
+
+  .print-button {
+    width: 100%;
+    height: 42px;
+    font-size: 13px;
+    justify-content: center;
+    border-radius: 9px;
   }
 
   .report-summary {
@@ -1056,5 +1106,250 @@ body{background:#f4f6f2}
 
   .mobile-creator-credit {
     display: none !important;
+  }
+}
+
+/* ================================================================
+   PRINT STYLESHEET (CETAK LAPORAN BULANAN)
+   ================================================================ */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm 1.2cm;
+  }
+
+  /* Reset layout */
+  html, body {
+    background: #ffffff !important;
+    color: #111111 !important;
+    font-size: 10.5pt !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app shell chrome & elements not part of printed report */
+  .sidebar,
+  .topbar,
+  .mobile-fab,
+  .mobile-creator-credit,
+  .toast,
+  .period-field,
+  .print-button,
+  .page-heading,
+  dialog,
+  #view-dashboard,
+  #view-products,
+  #view-transactions {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block !important;
+    min-height: auto !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+  }
+
+  #view-reports {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  /* Print Header */
+  .print-only.print-header {
+    display: block !important;
+    border-bottom: 2px solid #183b2e;
+    padding-bottom: 12px;
+    margin-bottom: 22px;
+  }
+
+  .print-brand {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #183b2e;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .print-title {
+    font-size: 19pt;
+    font-weight: 800;
+    color: #111111;
+    margin: 4px 0 10px;
+    letter-spacing: -0.5px;
+  }
+
+  .print-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10pt;
+    color: #444444;
+  }
+
+  .print-meta strong {
+    color: #111111;
+  }
+
+  /* Report Summary Tiles in Print */
+  .report-summary {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px !important;
+    margin-bottom: 22px !important;
+    page-break-inside: avoid;
+  }
+
+  .report-tile {
+    background: #fbfdfb !important;
+    border: 1px solid #c7d1c9 !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+  }
+
+  .report-tile > span {
+    font-size: 8.5pt !important;
+    color: #555555 !important;
+    display: block;
+  }
+
+  .report-tile strong {
+    font-size: 14pt !important;
+    color: #111111 !important;
+    margin-top: 6px !important;
+    display: block;
+  }
+
+  .report-tile strong.report-income {
+    color: #186b3b !important;
+  }
+
+  .report-tile strong.report-expense {
+    color: #b35919 !important;
+  }
+
+  /* Report Table in Print */
+  .report-panel {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .report-panel .panel-heading {
+    margin-bottom: 10px !important;
+  }
+
+  .report-panel .panel-heading h2 {
+    font-size: 12pt !important;
+    color: #111111 !important;
+  }
+
+  .report-panel .panel-heading p {
+    display: none !important;
+  }
+
+  .table-wrap {
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9.5pt !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  thead th {
+    background: #eaefeb !important;
+    color: #183b2e !important;
+    border-bottom: 2px solid #a8b8ac !important;
+    border-top: 1px solid #d4ded6 !important;
+    padding: 8px 10px !important;
+    font-size: 9pt !important;
+    font-weight: 700 !important;
+  }
+
+  tbody td {
+    padding: 8px 10px !important;
+    border-bottom: 1px solid #e1e7e2 !important;
+    color: #222222 !important;
+    font-size: 9.5pt !important;
+  }
+
+  .amount-in {
+    color: #186b3b !important;
+    font-weight: 700 !important;
+  }
+
+  .amount-out {
+    color: #b35919 !important;
+    font-weight: 700 !important;
+  }
+
+  .empty-state {
+    padding: 30px !important;
+    border: 1px dashed #cccccc !important;
+    border-radius: 8px !important;
+  }
+
+  /* Formal cooperative signatures block */
+  .print-only.print-signatures {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 45px !important;
+    page-break-inside: avoid;
+    padding: 0 40px !important;
+  }
+
+  .signature-box {
+    text-align: center;
+    width: 190px;
+  }
+
+  .signature-box span {
+    font-size: 9.5pt;
+    color: #444444;
+  }
+
+  .signature-line {
+    margin: 65px auto 8px;
+    width: 170px;
+    border-bottom: 1px solid #333333;
+  }
+
+  .signature-box strong {
+    font-size: 10pt;
+    color: #111111;
+  }
+
+  /* Print Footer */
+  .print-only.print-footer {
+    display: block !important;
+    text-align: center;
+    font-size: 8pt;
+    color: #888888;
+    margin-top: 35px;
+    border-top: 1px solid #e6ece7;
+    padding-top: 10px;
+    page-break-inside: avoid;
   }
 }

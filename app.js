@@ -5,6 +5,7 @@ const SHEETS_API_URL = "https://sheets.googleapis.com/v4/spreadsheets";
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const monthLongFormatter = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" });
 const today = localDateValue(new Date());
 let toastTimeout;
 let state = loadState();
@@ -452,6 +453,24 @@ function renderReport() {
     <td class="align-right amount-out">${currency.format(daily.expense)}</td><td class="align-right">${currency.format(daily.income - daily.expense)}</td>
     <td class="align-right">${daily.count.toLocaleString("id-ID")}</td></tr>`).join("");
   document.getElementById("reports-empty").classList.toggle("show", rows.length === 0);
+  prepareReportPrint();
+}
+
+function prepareReportPrint() {
+  const monthInput = document.getElementById("report-month").value || today.slice(0, 7);
+  const [yearStr, monthStr] = monthInput.split("-");
+  const reportDate = new Date(Number(yearStr), Number(monthStr) - 1, 1);
+  const formattedPeriod = monthLongFormatter.format(reportDate);
+
+  const periodLabel = document.getElementById("print-period-label");
+  if (periodLabel) periodLabel.textContent = formattedPeriod;
+
+  const dateLabel = document.getElementById("print-date-label");
+  if (dateLabel) {
+    const now = new Date();
+    const timeStr = String(now.getHours()).padStart(2, "0") + "." + String(now.getMinutes()).padStart(2, "0") + " WIB";
+    dateLabel.textContent = formatDate(localDateValue(now), fullDateFormatter) + ", " + timeStr;
+  }
 }
 
 function renderAll() {
@@ -673,6 +692,14 @@ document.querySelectorAll(".period-option").forEach((button) => button.addEventL
 
 document.getElementById("dashboard-date").addEventListener("change", renderDashboard);
 document.getElementById("report-month").addEventListener("change", renderReport);
+const printReportBtn = document.getElementById("print-report-button");
+if (printReportBtn) {
+  printReportBtn.addEventListener("click", () => {
+    prepareReportPrint();
+    window.print();
+  });
+}
+window.addEventListener("beforeprint", prepareReportPrint);
 document.getElementById("product-search").addEventListener("input", renderProducts);
 document.getElementById("transaction-filter").addEventListener("change", renderTransactions);
 document.getElementById("transaction-date-filter").addEventListener("change", renderTransactions);
