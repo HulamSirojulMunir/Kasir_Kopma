@@ -153,212 +153,230 @@ body{background:#f4f6f2}
 }
 
 /* ================================================================
-   BUKU KAS BULANAN STYLES
+   STANDAR BUKU KAS (SESUAI GAMBAR CONTOH / SPREADSHEET STYLE)
    ================================================================ */
 
-.buku-kas-overview {
+.buku-summary-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.buku-card {
+.buku-sheet-card {
   background: #ffffff;
-  border: 1px solid #edf0ed;
+  border: 1px solid #c7d2c9;
   border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 114px;
-  box-shadow: 0 2px 8px #243b2d08;
+  padding: 24px 22px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
 }
 
-.buku-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: #728076;
+.buku-sheet-header {
+  text-align: center;
+  margin-bottom: 20px;
 }
 
-.buku-card-icon {
-  font-size: 13px;
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 7px;
-  background: #f0f4f1;
-  color: #386749;
-}
-
-.buku-card-icon.icon-in {
-  background: #eaf5ec;
-  color: #318251;
-}
-
-.buku-card-icon.icon-out {
-  background: #fff4ea;
-  color: #d17537;
-}
-
-.buku-card-icon.icon-balance {
-  background: #eaf1fb;
-  color: #4b78b5;
-}
-
-.buku-card strong {
-  font-family: Manrope, sans-serif;
+.sheet-title {
+  font-family: "Manrope", "DM Sans", Arial, sans-serif;
   font-size: 19px;
   font-weight: 800;
-  margin: 9px 0 4px;
-  color: #202923;
-  letter-spacing: -0.6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #111111;
+  letter-spacing: 0.6px;
+  margin: 0;
+  text-transform: uppercase;
 }
 
-.buku-card.starting-card {
-  border-left: 3px solid #6b8274;
+.sheet-subtitle {
+  font-family: "Manrope", "DM Sans", Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: #111111;
+  letter-spacing: 0.6px;
+  margin: 4px 0 0;
+  text-transform: uppercase;
 }
 
-.buku-card.income-card {
-  border-left: 3px solid #28764b;
+/* Tabel Standar Buku Kas */
+.sheet-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.buku-card.expense-card {
-  border-left: 3px solid #df8042;
-}
-
-.buku-card.ending-card {
-  border-left: 3px solid #1c5236;
-  background: #fbfdfa;
-}
-
-.buku-card-sub {
-  font-size: 10px;
-  color: #879389;
-  font-weight: 500;
-}
-
-.buku-income {
-  color: #28734a !important;
-}
-
-.buku-expense {
-  color: #d37335 !important;
-}
-
-/* Toolbar Buku Kas */
-.buku-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  gap: 12px;
-}
-
-.buku-tabs {
-  display: flex;
-  background: #edf1ec;
-  border-radius: 8px;
-  padding: 3px;
-}
-
-.buku-tabs .period-option {
-  padding: 8px 14px;
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-.buku-count-pill {
-  padding: 6px 12px;
-  background: #edf3ee;
-  border-radius: 14px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #2e593d;
-  white-space: nowrap;
-}
-
-.buku-legend {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-  color: #6a7b6f;
-}
-
-.buku-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* Tabel Buku Kas Umum (Desktop) */
-.buku-table {
+.sheet-table {
   width: 100%;
   border-collapse: collapse;
-}
-
-.buku-table thead th {
-  background: #f6f8f5;
-  color: #5d7062;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  padding: 10px 12px;
-  border-bottom: 2px solid #e2e8e2;
-  white-space: nowrap;
-}
-
-.buku-table tbody td {
-  padding: 11px 12px;
-  border-bottom: 1px solid #edf1ee;
-  font-size: 12px;
-  color: #37473b;
-}
-
-.buku-row-no {
-  color: #929e95;
-  text-align: center;
-  font-size: 11px;
-}
-
-.buku-desc-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.buku-desc-text {
-  font-weight: 600;
-  color: #213226;
-}
-
-.amount-balance {
-  font-family: Manrope, sans-serif;
+  font-family: "DM Sans", Arial, sans-serif;
   font-size: 13px;
-  font-weight: 700;
-  color: #1a422d;
-  white-space: nowrap;
+  background: #ffffff;
 }
 
-.buku-tfoot th {
-  background: #f3f7f4;
-  color: #173b2a;
+/* Semua cell memiliki border grid tegas seperti excel/buku kas */
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #5a665d;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+/* Header Tabel */
+.sheet-table thead th {
+  background: #d3dbd4;
+  color: #000000;
   font-weight: 800;
   font-size: 12px;
-  padding: 12px 12px;
-  border-top: 2px solid #cbd7ce;
-  border-bottom: 2px solid #cbd7ce;
+  letter-spacing: 0.6px;
+  padding: 10px 8px;
+  border: 1px solid #4a544d;
 }
 
-/* Mobile Buku Kas List Card (ala BukuKas Android) */
-.buku-mobile-list {
+/* Kolom TGL */
+.sheet-table .col-tgl {
+  width: 55px;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Kolom URAIAN */
+.sheet-table .col-uraian {
+  min-width: 220px;
+  text-align: left;
+}
+
+/* Kolom PEMASUKAN */
+.sheet-table .col-pemasukan {
+  width: 145px;
+  min-width: 135px;
+}
+
+/* Kolom PENGELUARAN */
+.sheet-table .col-pengeluaran {
+  width: 145px;
+  min-width: 135px;
+}
+
+/* Kolom SISA SALDO (Background Abu-abu Khas Sesuai Gambar) */
+.sheet-table .col-saldo {
+  width: 155px;
+  min-width: 145px;
+  background: #c3cdc5 !important;
+  font-weight: 800;
+  color: #000000;
+  border-left: 2px solid #4a544d;
+  border-right: 2px solid #4a544d;
+}
+
+.sheet-table thead th.col-saldo {
+  background: #b5c2b7 !important;
+}
+
+.sheet-table tbody td.col-saldo {
+  background: #cdd6cf !important;
+  font-weight: 800;
+  color: #000000;
+  border-left: 2px solid #4a544d;
+  border-right: 2px solid #4a544d;
+}
+
+/* Body data */
+.sheet-table tbody td {
+  color: #111111;
+  font-size: 12.5px;
+  height: 34px;
+}
+
+.sheet-table tbody tr:hover td:not(.col-saldo) {
+  background: #f7faf7;
+}
+
+.sheet-row-initial td {
+  background: #fcfdfc;
+  color: #4b584e;
+}
+
+.sheet-desc-text {
+  font-weight: 500;
+  color: #16241a;
+}
+
+.cell-amount-in {
+  color: #1a6b3b;
+  font-weight: 600;
+}
+
+.cell-amount-out {
+  color: #b53e28;
+  font-weight: 600;
+}
+
+/* Baris TOTAL di bawah */
+.sheet-total-row th {
+  background: #d8dfd9 !important;
+  color: #000000 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  border-top: 2px solid #4a544d !important;
+  border-bottom: 3px double #333333 !important;
+  padding: 10px 10px !important;
+}
+
+.sheet-total-row th.col-saldo {
+  background: #b5c2b7 !important;
+  font-size: 13.5px !important;
+}
+
+.align-center {
+  text-align: center;
+}
+
+/* Format Accounting Excel: Lambang Rp di kiri, Nilai angka di kanan */
+.cell-money {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-curr {
+  font-size: 11px;
+  font-weight: 500;
+  color: #4b584e;
+  user-select: none;
+}
+
+.col-saldo .cell-curr {
+  color: #111111;
+  font-weight: 700;
+}
+
+.cell-num {
+  text-align: right;
+  font-weight: inherit;
+}
+
+.receipt-view-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #eef3ee;
+  border: 1px solid #c9d5cb;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #275638;
+  margin-left: 6px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.receipt-view-button:hover {
+  background: #dfeade;
+}
+
+.mobile-sheet-hint {
   display: none;
 }
 
@@ -1005,168 +1023,84 @@ body{background:#f4f6f2}
   }
 
   .report-summary,
-  .buku-kas-overview {
+  .buku-summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
     margin-bottom: 14px;
   }
 
-  .buku-card {
-    padding: 13px 12px;
-    min-height: 108px;
+  .buku-sheet-card {
+    padding: 16px 12px;
     border-radius: 12px;
   }
 
-  .buku-card strong {
-    font-size: 17px;
-    margin: 8px 0 4px;
-  }
-
-  .buku-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+  .buku-sheet-header {
     margin-bottom: 14px;
   }
 
-  .buku-tabs {
-    width: 100%;
+  .sheet-title {
+    font-size: 16px;
   }
 
-  .buku-tabs .period-option {
-    flex: 1;
+  .sheet-subtitle {
+    font-size: 13px;
+  }
+
+  .mobile-sheet-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #3b5b47;
+    background: #eef5ef;
+    border: 1px dashed #b7cbbd;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
     text-align: center;
-    padding: 9px 0;
+  }
+
+  .sheet-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #5a665d;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .sheet-table {
+    min-width: 540px;
     font-size: 11.5px;
   }
 
-  .buku-count-pill {
-    text-align: center;
-    width: 100%;
-    box-sizing: border-box;
+  .sheet-table th,
+  .sheet-table td {
+    padding: 7px 6px;
   }
 
-  .buku-legend {
-    display: none;
+  .sheet-table .col-tgl {
+    width: 44px;
+    min-width: 40px;
   }
 
-  /* Di layar HP Android, sembunyikan tabel lebar dan tampilkan kartu ala BukuKas */
-  .buku-table-wrap {
-    display: none !important;
+  .sheet-table .col-uraian {
+    min-width: 170px;
   }
 
-  .buku-mobile-list {
-    display: flex !important;
-    flex-direction: column;
-    gap: 9px;
-    margin-top: 2px;
+  .sheet-table .col-pemasukan {
+    width: 115px;
+    min-width: 110px;
   }
 
-  .buku-card-item {
-    background: #ffffff;
-    border: 1px solid #e7eee7;
-    border-radius: 10px;
-    padding: 12px 13px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-    transition: background 0.15s;
+  .sheet-table .col-pengeluaran {
+    width: 115px;
+    min-width: 110px;
   }
 
-  .buku-card-item.income {
-    border-left: 4px solid #28764b;
-  }
-
-  .buku-card-item.expense {
-    border-left: 4px solid #dd783c;
-  }
-
-  .buku-card-item.initial {
-    border-left: 4px solid #6c8475;
-    background: #fbfdfa;
-  }
-
-  .buku-card-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .buku-item-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .buku-type-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-
-  .buku-type-icon.income {
-    background: #eaf5ec;
-    color: #2b7747;
-  }
-
-  .buku-type-icon.expense {
-    background: #fff4ea;
-    color: #ce7533;
-  }
-
-  .buku-type-icon.balance {
-    background: #eef3ef;
-    color: #4b6b54;
-  }
-
-  .buku-item-info {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .buku-item-desc {
-    font-size: 13px;
-    font-weight: 600;
-    color: #223026;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .buku-item-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 3px;
-    font-size: 11px;
-    color: #828f84;
-  }
-
-  .buku-item-right {
-    text-align: right;
-    flex-shrink: 0;
-  }
-
-  .buku-item-amount {
-    font-family: Manrope, sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-  }
-
-  .buku-item-balance {
-    font-size: 10.5px;
-    color: #79897d;
-    margin-top: 3px;
-  }
-
-  .buku-item-balance strong {
-    color: #17422b;
+  .sheet-table .col-saldo {
+    width: 125px;
+    min-width: 120px;
   }
 
   .report-tile {
@@ -1680,45 +1614,137 @@ body{background:#f4f6f2}
     border-radius: 8px !important;
   }
 
-  /* Print Buku Kas Umum */
-  .buku-toolbar,
-  .buku-legend,
-  .buku-mobile-list,
-  #buku-daily-view {
+  /* Print Standar Buku Kas Spreadsheet */
+  .buku-summary-strip,
+  .mobile-sheet-hint,
+  .receipt-view-button {
     display: none !important;
   }
 
-  #buku-ledger-view,
-  .buku-table-wrap {
-    display: block !important;
+  .buku-sheet-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
   }
 
-  .buku-table {
+  .buku-sheet-header {
+    text-align: center !important;
+    margin-bottom: 20px !important;
+  }
+
+  .print-brand {
+    font-size: 9pt !important;
+    font-weight: 700 !important;
+    color: #183b2e !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+    margin-bottom: 6px !important;
+  }
+
+  .sheet-title {
+    font-size: 16pt !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .sheet-subtitle {
+    font-size: 13pt !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+    margin: 4px 0 0 !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .print-date-sub {
+    font-size: 8.5pt !important;
+    color: #555555 !important;
+    margin-top: 6px !important;
+  }
+
+  .sheet-table-wrap {
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .sheet-table {
     display: table !important;
     width: 100% !important;
     border-collapse: collapse !important;
-  }
-
-  .buku-table thead th {
-    background: #eaefeb !important;
-    color: #183b2e !important;
-    border: 1px solid #cad4cc !important;
-    font-size: 8.5pt !important;
-    padding: 7px 8px !important;
-  }
-
-  .buku-table tbody td {
-    border: 1px solid #cad4cc !important;
-    font-size: 9pt !important;
-    padding: 6px 8px !important;
-  }
-
-  .buku-tfoot th {
-    background: #edf3ee !important;
-    border: 1px solid #cad4cc !important;
     font-size: 9.5pt !important;
-    padding: 8px 8px !important;
-    color: #183b2e !important;
+    table-layout: auto !important;
+  }
+
+  .sheet-table th,
+  .sheet-table td {
+    border: 1px solid #333333 !important;
+    padding: 6px 8px !important;
+    color: #000000 !important;
+  }
+
+  .sheet-table thead th {
+    background: #d3dbd4 !important;
+    color: #000000 !important;
+    font-weight: 800 !important;
+    font-size: 9pt !important;
+    border: 1px solid #222222 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .sheet-table .col-tgl {
+    width: 38px !important;
+  }
+
+  .sheet-table .col-pemasukan {
+    width: 110px !important;
+  }
+
+  .sheet-table .col-pengeluaran {
+    width: 110px !important;
+  }
+
+  .sheet-table .col-saldo {
+    width: 125px !important;
+    background: #c3cdc5 !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+    border-left: 2px solid #222222 !important;
+    border-right: 2px solid #222222 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .sheet-total-row th {
+    background: #d8dfd9 !important;
+    color: #000000 !important;
+    font-weight: 800 !important;
+    font-size: 9.5pt !important;
+    border-top: 2px solid #000000 !important;
+    border-bottom: 3px double #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .cell-money {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    width: 100% !important;
+    gap: 4px !important;
+  }
+
+  .cell-curr {
+    font-size: 8pt !important;
+    color: #222222 !important;
+  }
+
+  .cell-num {
+    text-align: right !important;
   }
 
   /* Formal cooperative signatures block */

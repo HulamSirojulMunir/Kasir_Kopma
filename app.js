@@ -433,227 +433,125 @@ function renderTransactions() {
   document.querySelector("#transactions-empty p").textContent = state.transactions.length ? "Coba ubah filter jenis atau bulan." : "Transaksi yang kamu catat akan muncul di sini.";
 }
 
+function formatMoneyText(amount) {
+  if (amount === 0 || amount === null || amount === undefined || isNaN(amount)) return "Rp 0";
+  const prefix = amount < 0 ? "-Rp " : "Rp ";
+  return `${prefix}${Math.abs(amount).toLocaleString("id-ID")}`;
+}
+
+function formatCellMoneyHtml(amount) {
+  if (amount === 0 || amount === null || amount === undefined || isNaN(amount)) {
+    return `<span class="cell-money"><span class="cell-curr">Rp</span><span class="cell-num">-</span></span>`;
+  }
+  const isNeg = amount < 0;
+  const numStr = Math.abs(amount).toLocaleString("id-ID");
+  const prefix = isNeg ? "-Rp" : "Rp";
+  return `<span class="cell-money"><span class="cell-curr">${prefix}</span><span class="cell-num">${numStr}</span></span>`;
+}
+
 function renderReport() {
   const month = document.getElementById("report-month").value || today.slice(0, 7);
+  const [yearStr, monthStr] = month.split("-");
+  const monthDate = new Date(Number(yearStr), Number(monthStr) - 1, 1);
+  const monthUpper = monthLongFormatter.format(monthDate).toUpperCase();
 
-  // 1. Hitung saldo awal (kumulatif transaksi sebelum bulan ini)
+  // Update Judul Sheet: BULAN [BULAN] [TAHUN]
+  const titleEl = document.getElementById("sheet-month-label");
+  if (titleEl) titleEl.textContent = `BULAN ${monthUpper}`;
+
+  // 1. Saldo awal sebelum bulan ini
   const priorTransactions = state.transactions.filter((t) => t.date < `${month}-01`);
   const startingIncome = priorTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
   const startingExpense = priorTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
   const startingBalance = startingIncome - startingExpense;
 
-  // 2. Transaksi bulan ini diurutkan kronologis (terlama ke terbaru) untuk menghitung saldo berjalan
+  // 2. Transaksi bulan ini (urut kronologis terlama ke terbaru)
   const currentEntries = state.transactions
     .filter((t) => t.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
   const totalIncome = currentEntries.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
   const totalExpense = currentEntries.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
-  const netChange = totalIncome - totalExpense;
-  const endingBalance = startingBalance + netChange;
-  const countIncome = currentEntries.filter((t) => t.type === "income").length;
-  const countExpense = currentEntries.filter((t) => t.type === "expense").length;
+  const endingBalance = startingBalance + totalIncome - totalExpense;
 
-  // Update ringkasan Buku Kas
-  const startingEl = document.getElementById("buku-starting-balance");
-  if (startingEl) startingEl.textContent = currency.format(startingBalance);
+  // 3. Update summary card di atas
+  const startEl = document.getElementById("buku-starting-balance");
+  if (startEl) startEl.textContent = formatMoneyText(startingBalance);
+  document.getElementById("report-income").textContent = formatMoneyText(totalIncome);
+  document.getElementById("report-expense").textContent = formatMoneyText(totalExpense);
+  document.getElementById("report-balance").textContent = formatMoneyText(endingBalance);
+  const countEl = document.getElementById("report-count");
+  if (countEl) countEl.textContent = currentEntries.length.toString();
 
-  document.getElementById("report-income").textContent = currency.format(totalIncome);
-  document.getElementById("report-expense").textContent = currency.format(totalExpense);
-  document.getElementById("report-balance").textContent = currency.format(endingBalance);
-  document.getElementById("report-count").textContent = currentEntries.length.toLocaleString("id-ID");
-
-  const incCountEl = document.getElementById("buku-income-count");
-  if (incCountEl) incCountEl.textContent = countIncome.toLocaleString("id-ID");
-  const expCountEl = document.getElementById("buku-expense-count");
-  if (expCountEl) expCountEl.textContent = countExpense.toLocaleString("id-ID");
-
-  const statusEl = document.getElementById("buku-balance-status");
-  if (statusEl) {
-    if (netChange > 0) {
-      statusEl.textContent = `Surplus bulan ini: +${currency.format(netChange)}`;
-      statusEl.style.color = "#247346";
-    } else if (netChange < 0) {
-      statusEl.textContent = `Defisit bulan ini: -${currency.format(Math.abs(netChange))}`;
-      statusEl.style.color = "#c2543d";
-    } else {
-      statusEl.textContent = "Imbang (kas seimbang)";
-      statusEl.style.color = "#6c7b70";
-    }
-  }
-
-  // 3. Hitung saldo berjalan untuk setiap transaksi Buku Kas
+  // 4. Hitung baris-baris Buku Kas dengan saldo berjalan
   let running = startingBalance;
-  const ledger = currentEntries.map((item, idx) => {
+  const ledger = currentEntries.map((item) => {
     if (item.type === "income") running += item.amount;
     else running -= item.amount;
     return {
       ...item,
-      rowNo: idx + 1,
       runningBalance: running
     };
   });
 
-  // Render Tabel Buku Kas Umum (Desktop & Cetak)
-  const ledgerRowsEl = document.getElementById("buku-ledger-rows");
-  const ledgerFootEl = document.getElementById("buku-ledger-foot");
-  const mobileListEl = document.getElementById("buku-mobile-list");
+  const tbodyEl = document.getElementById("buku-kas-rows");
+  const tfootEl = document.getElementById("buku-kas-tfoot");
 
-  const monthYearLabel = monthLongFormatter.format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1));
+  let rowsHtml = "";
 
-  if (ledger.length === 0) {
-    if (ledgerRowsEl) {
-      ledgerRowsEl.innerHTML = `<tr>
-        <td class="buku-row-no">0</td>
-        <td>01 ${monthYearLabel}</td>
-        <td><em>Saldo Awal Bulan</em></td>
-        <td class="align-right">—</td>
-        <td class="align-right">—</td>
-        <td class="align-right amount-balance"><strong>${currency.format(startingBalance)}</strong></td>
-      </tr>`;
-    }
-    if (ledgerFootEl) {
-      ledgerFootEl.innerHTML = `<tr>
-        <th colspan="3">TOTAL KAS AKHIR</th>
-        <th class="align-right amount-in">${currency.format(0)}</th>
-        <th class="align-right amount-out">${currency.format(0)}</th>
-        <th class="align-right amount-balance">${currency.format(startingBalance)}</th>
-      </tr>`;
-    }
-    if (mobileListEl) {
-      mobileListEl.innerHTML = `<div class="buku-card-item initial">
-        <div class="buku-card-main">
-          <div class="buku-item-left">
-            <span class="buku-type-icon balance">💼</span>
-            <div class="buku-item-info">
-              <strong>Saldo Awal Bulan</strong>
-              <span class="buku-item-date">Awal bulan ${monthYearLabel}</span>
-            </div>
-          </div>
-          <div class="buku-item-right">
-            <div class="buku-item-amount">${currency.format(startingBalance)}</div>
-            <div class="buku-item-balance">Kas awal</div>
-          </div>
-        </div>
-      </div>`;
-    }
-  } else {
-    // Baris saldo awal
-    let rowsHtml = `<tr>
-      <td class="buku-row-no">0</td>
-      <td>01 ${monthYearLabel}</td>
-      <td><em>Saldo Awal Bulan</em></td>
-      <td class="align-right">—</td>
-      <td class="align-right">—</td>
-      <td class="align-right amount-balance"><strong>${currency.format(startingBalance)}</strong></td>
+  // Tampilkan saldo awal bulan jika ada saldo awal atau jika belum ada transaksi
+  if (startingBalance !== 0 || ledger.length === 0) {
+    rowsHtml += `<tr class="sheet-row-initial">
+      <td class="col-tgl align-center">-</td>
+      <td class="col-uraian"><em>Saldo Awal Bulan</em></td>
+      <td class="col-pemasukan align-right">${formatCellMoneyHtml(0)}</td>
+      <td class="col-pengeluaran align-right">${formatCellMoneyHtml(0)}</td>
+      <td class="col-saldo align-right"><strong>${formatCellMoneyHtml(startingBalance)}</strong></td>
     </tr>`;
-
-    rowsHtml += ledger.map((item) => {
-      const isIncome = item.type === "income";
-      return `<tr>
-        <td class="buku-row-no">${item.rowNo}</td>
-        <td>${formatDate(item.date)}</td>
-        <td>
-          <div class="buku-desc-cell">
-            <span class="buku-desc-text">${escapeHTML(item.description)}</span>
-            ${item.receiptImage ? `<button class="receipt-view-button" type="button" data-view-receipt="${escapeHTML(item.id)}">Lihat nota</button>` : ""}
-          </div>
-        </td>
-        <td class="align-right amount-in">${isIncome ? currency.format(item.amount) : "—"}</td>
-        <td class="align-right amount-out">${!isIncome ? currency.format(item.amount) : "—"}</td>
-        <td class="align-right amount-balance"><strong>${currency.format(item.runningBalance)}</strong></td>
-      </tr>`;
-    }).join("");
-
-    if (ledgerRowsEl) ledgerRowsEl.innerHTML = rowsHtml;
-
-    if (ledgerFootEl) {
-      ledgerFootEl.innerHTML = `<tr>
-        <th colspan="3">TOTAL ARUS KAS BULAN INI</th>
-        <th class="align-right amount-in">${currency.format(totalIncome)}</th>
-        <th class="align-right amount-out">${currency.format(totalExpense)}</th>
-        <th class="align-right amount-balance">${currency.format(endingBalance)}</th>
-      </tr>`;
-    }
-
-    // Render Kartu Mobile ala BukuKas (dari transaksi terbaru ke terlama)
-    const reversedLedger = [...ledger].reverse();
-    if (mobileListEl) {
-      mobileListEl.innerHTML = reversedLedger.map((item) => {
-        const isIncome = item.type === "income";
-        const type = isIncome ? "income" : "expense";
-        return `<div class="buku-card-item ${type}">
-          <div class="buku-card-main">
-            <div class="buku-item-left">
-              <span class="buku-type-icon ${type}">${isIncome ? "↗" : "↙"}</span>
-              <div class="buku-item-info">
-                <strong class="buku-item-desc">${escapeHTML(item.description)}</strong>
-                <div class="buku-item-meta">
-                  <span class="buku-item-date">${formatDate(item.date)}</span>
-                  ${item.receiptImage ? `<button class="receipt-view-button" type="button" data-view-receipt="${escapeHTML(item.id)}">Lihat nota</button>` : ""}
-                </div>
-              </div>
-            </div>
-            <div class="buku-item-right">
-              <div class="buku-item-amount ${isIncome ? "amount-in" : "amount-out"}">
-                ${isIncome ? "+" : "−"}${currency.format(item.amount)}
-              </div>
-              <div class="buku-item-balance">
-                Saldo: <strong>${currency.format(item.runningBalance)}</strong>
-              </div>
-            </div>
-          </div>
-        </div>`;
-      }).join("") + `<div class="buku-card-item initial">
-        <div class="buku-card-main">
-          <div class="buku-item-left">
-            <span class="buku-type-icon balance">💼</span>
-            <div class="buku-item-info">
-              <strong>Saldo Awal Bulan</strong>
-              <span class="buku-item-date">Sebelum periode ini</span>
-            </div>
-          </div>
-          <div class="buku-item-right">
-            <div class="buku-item-amount">${currency.format(startingBalance)}</div>
-            <div class="buku-item-balance">Kas awal</div>
-          </div>
-        </div>
-      </div>`;
-    }
   }
 
-  // 4. Render Rekap Harian (Tab kedua)
-  const days = new Map();
+  // Tampilkan setiap transaksi persis seperti format gambar buku kas
+  let lastDay = "";
   ledger.forEach((item) => {
-    const daily = days.get(item.date) || { income: 0, expense: 0, count: 0, endBalance: item.runningBalance };
-    daily[item.type] += item.amount;
-    daily.count += 1;
-    daily.endBalance = item.runningBalance;
-    days.set(item.date, daily);
-  });
-  const dayRows = [...days.entries()].sort(([a], [b]) => b.localeCompare(a));
-  document.getElementById("report-rows").innerHTML = dayRows.map(([date, daily]) => `<tr>
-    <td><strong>${formatDate(date, fullDateFormatter)}</strong></td>
-    <td class="align-right amount-in">${currency.format(daily.income)}</td>
-    <td class="align-right amount-out">${currency.format(daily.expense)}</td>
-    <td class="align-right ${daily.income >= daily.expense ? "amount-in" : "amount-out"}">${currency.format(daily.income - daily.expense)}</td>
-    <td class="align-right amount-balance"><strong>${currency.format(daily.endBalance)}</strong></td>
-    <td class="align-right">${daily.count.toLocaleString("id-ID")}</td>
-  </tr>`).join("");
+    const isIncome = item.type === "income";
+    const dayNum = Number(item.date.slice(8, 10));
+    // TGL hanya muncul pada baris pertama untuk hari yang sama, baris berikutnya kosong (persis di gambar user!)
+    const showDay = item.date !== lastDay;
+    lastDay = item.date;
 
-  document.getElementById("reports-empty").classList.toggle("show", currentEntries.length === 0 && startingBalance === 0);
+    rowsHtml += `<tr>
+      <td class="col-tgl align-center">${showDay ? dayNum : ""}</td>
+      <td class="col-uraian">
+        <span class="sheet-desc-text">${escapeHTML(item.description)}</span>
+        ${item.receiptImage ? `<button class="receipt-view-button" type="button" data-view-receipt="${escapeHTML(item.id)}" title="Lihat foto nota">📎 Nota</button>` : ""}
+      </td>
+      <td class="col-pemasukan align-right ${isIncome ? "cell-amount-in" : ""}">${formatCellMoneyHtml(isIncome ? item.amount : 0)}</td>
+      <td class="col-pengeluaran align-right ${!isIncome ? "cell-amount-out" : ""}">${formatCellMoneyHtml(!isIncome ? item.amount : 0)}</td>
+      <td class="col-saldo align-right"><strong>${formatCellMoneyHtml(item.runningBalance)}</strong></td>
+    </tr>`;
+  });
+
+  if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
+
+  // Baris TOTAL di bawah (tfoot)
+  if (tfootEl) {
+    tfootEl.innerHTML = `<tr class="sheet-total-row">
+      <th colspan="2" class="align-center">TOTAL</th>
+      <th class="col-pemasukan align-right ${totalIncome > 0 ? "cell-amount-in" : ""}">${formatCellMoneyHtml(totalIncome)}</th>
+      <th class="col-pengeluaran align-right ${totalExpense > 0 ? "cell-amount-out" : ""}">${formatCellMoneyHtml(totalExpense)}</th>
+      <th class="col-saldo align-right"><strong>${formatCellMoneyHtml(endingBalance)}</strong></th>
+    </tr>`;
+  }
+
+  const emptyEl = document.getElementById("reports-empty");
+  if (emptyEl) {
+    emptyEl.classList.toggle("show", ledger.length === 0 && startingBalance === 0);
+  }
+
   prepareReportPrint();
 }
 
 function prepareReportPrint() {
-  const monthInput = document.getElementById("report-month").value || today.slice(0, 7);
-  const [yearStr, monthStr] = monthInput.split("-");
-  const reportDate = new Date(Number(yearStr), Number(monthStr) - 1, 1);
-  const formattedPeriod = monthLongFormatter.format(reportDate);
-
-  const periodLabel = document.getElementById("print-period-label");
-  if (periodLabel) periodLabel.textContent = formattedPeriod;
-
   const dateLabel = document.getElementById("print-date-label");
   if (dateLabel) {
     const now = new Date();
@@ -890,26 +788,8 @@ if (printReportBtn) {
 }
 window.addEventListener("beforeprint", prepareReportPrint);
 
-document.querySelectorAll("[data-buku-mode]").forEach((button) => button.addEventListener("click", () => {
-  currentBukuMode = button.dataset.bukuMode;
-  document.querySelectorAll("[data-buku-mode]").forEach((btn) => btn.classList.toggle("active", btn === button));
-  const isLedger = currentBukuMode === "ledger";
-  const ledgerView = document.getElementById("buku-ledger-view");
-  const dailyView = document.getElementById("buku-daily-view");
-  if (ledgerView) ledgerView.hidden = !isLedger;
-  if (dailyView) dailyView.hidden = isLedger;
-  const panelTitle = document.getElementById("buku-panel-title");
-  const panelSubtitle = document.getElementById("buku-panel-subtitle");
-  if (panelTitle) panelTitle.textContent = isLedger ? "Buku Kas Umum" : "Rekap Kas Harian";
-  if (panelSubtitle) panelSubtitle.textContent = isLedger
-    ? "Catatan mutasi kas masuk, kas keluar, dan saldo berjalan."
-    : "Ringkasan total pemasukan dan pengeluaran setiap tanggal.";
-}));
-
-const bukuMobileList = document.getElementById("buku-mobile-list");
-if (bukuMobileList) bukuMobileList.addEventListener("click", openReceiptFromEvent);
-const bukuLedgerRows = document.getElementById("buku-ledger-rows");
-if (bukuLedgerRows) bukuLedgerRows.addEventListener("click", openReceiptFromEvent);
+const bukuKasRows = document.getElementById("buku-kas-rows");
+if (bukuKasRows) bukuKasRows.addEventListener("click", openReceiptFromEvent);
 document.getElementById("product-search").addEventListener("input", renderProducts);
 document.getElementById("transaction-filter").addEventListener("change", renderTransactions);
 document.getElementById("transaction-date-filter").addEventListener("change", renderTransactions);
