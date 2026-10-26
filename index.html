@@ -2,7 +2,10 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#183b2e" />
     <title>Kopma Kasir — Keuangan koperasi</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,10 +22,10 @@
         </a>
         <div class="nav-label">MENU UTAMA</div>
         <nav class="main-nav" aria-label="Navigasi utama">
-          <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span>Ringkasan</button>
-          <button class="nav-item" data-view="products"><span class="nav-icon">▤</span>Daftar barang</button>
-          <button class="nav-item" data-view="transactions"><span class="nav-icon">↕</span>Transaksi</button>
-          <button class="nav-item" data-view="reports"><span class="nav-icon">▥</span>Laporan</button>
+          <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span class="nav-label-text">Ringkasan</span></button>
+          <button class="nav-item" data-view="products"><span class="nav-icon">▤</span><span class="nav-label-text">Daftar barang</span></button>
+          <button class="nav-item" data-view="transactions"><span class="nav-icon">↕</span><span class="nav-label-text">Transaksi</span></button>
+          <button class="nav-item" data-view="reports"><span class="nav-icon">▥</span><span class="nav-label-text">Laporan</span></button>
         </nav>
         <div class="sidebar-bottom">
           <div class="help-card">
@@ -140,8 +143,13 @@
             <div class="empty-state" id="reports-empty"><span class="empty-icon">▥</span><strong>Belum ada data bulan ini</strong><p>Transaksi harian akan dirangkum otomatis di sini.</p></div>
           </article>
         </section>
+        <div class="mobile-creator-credit">Dibuat oleh <strong>HSM</strong></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
       </main>
+      <button class="mobile-fab" data-open-transaction type="button" aria-label="Catat transaksi baru">
+        <span class="mobile-fab-icon">＋</span>
+        <span class="mobile-fab-label">Catat</span>
+      </button>
     </div>
 
     <dialog id="transaction-dialog" class="transaction-dialog">

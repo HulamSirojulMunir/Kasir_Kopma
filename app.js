@@ -472,10 +472,10 @@ function openTransaction(type) {
   renderSaleProductOptions();
   updateTransactionMode();
   document.getElementById("transaction-dialog").showModal();
-  if (form.elements.type.value === "income" && document.getElementById("income-mode").value === "sale") {
+  if (window.innerWidth > 768 && form.elements.type.value === "income" && document.getElementById("income-mode").value === "sale") {
     document.getElementById("sale-product-select").focus();
   } else {
-    form.elements.description.focus();
+    if (window.innerWidth > 768) form.elements.description.focus();
   }
 }
 
@@ -650,7 +650,9 @@ renderAll();
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item === button));
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${button.dataset.view}`));
-  document.getElementById("page-crumb").textContent = button.textContent.trim();
+  const labelEl = button.querySelector(".nav-label-text");
+  document.getElementById("page-crumb").textContent = (labelEl ? labelEl.textContent : button.textContent.replace(/^[⌂▤↕▥]\s*/, "")).trim();
+  window.scrollTo({ top: 0, behavior: "auto" });
 }));
 
 document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => {
