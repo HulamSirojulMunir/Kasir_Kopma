@@ -132,31 +132,111 @@
 
         <section class="view" id="view-reports">
           <div class="page-heading">
-            <div><div class="eyebrow"><span class="eyebrow-line"></span> REKAP KEUANGAN</div><h1>Laporan bulanan</h1><p>Lihat ringkasan kas berdasarkan bulan pilihan.</p></div>
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> BUKU KAS & REKAP KEUANGAN</div><h1>Buku Kas Bulanan</h1><p>Catatan arus kas masuk, kas keluar, dan saldo kas koperasi.</p></div>
             <div class="report-heading-actions">
               <label class="period-field report-period"><span>Pilih bulan</span><input id="report-month" type="month" /></label>
-              <button class="button button-secondary print-button" id="print-report-button" type="button" aria-label="Cetak laporan bulanan">
-                <span class="button-icon">🖨</span> Cetak laporan
+              <button class="button button-secondary print-button" id="print-report-button" type="button" aria-label="Cetak buku kas bulanan">
+                <span class="button-icon">🖨</span> Cetak buku kas
               </button>
             </div>
           </div>
           <div class="print-only print-header">
             <div class="print-brand">Kopma Kasir — Keuangan Koperasi</div>
-            <h1 class="print-title">LAPORAN KEUANGAN BULANAN</h1>
+            <h1 class="print-title">BUKU KAS UMUM (BKU) BULANAN</h1>
             <div class="print-meta">
               <span>Periode: <strong id="print-period-label">-</strong></span>
               <span>Tanggal Cetak: <strong id="print-date-label">-</strong></span>
             </div>
           </div>
-          <div class="report-summary">
-            <article class="report-tile"><span>Total pemasukan</span><strong class="report-income" id="report-income">Rp0</strong></article>
-            <article class="report-tile"><span>Total pengeluaran</span><strong class="report-expense" id="report-expense">Rp0</strong></article>
-            <article class="report-tile"><span>Selisih bersih</span><strong id="report-balance">Rp0</strong></article>
-            <article class="report-tile"><span>Jumlah transaksi</span><strong id="report-count">0</strong></article>
+          <div class="buku-kas-overview report-summary">
+            <article class="buku-card starting-card report-tile">
+              <div class="buku-card-top"><span>Saldo awal bulan</span><span class="buku-card-icon">💼</span></div>
+              <strong id="buku-starting-balance">Rp0</strong>
+              <div class="buku-card-sub">Kas sebelum periode ini</div>
+            </article>
+            <article class="buku-card income-card report-tile">
+              <div class="buku-card-top"><span>Total kas masuk (debit)</span><span class="buku-card-icon icon-in">↗</span></div>
+              <strong class="report-income buku-income" id="report-income">Rp0</strong>
+              <div class="buku-card-sub"><span id="buku-income-count">0</span> transaksi masuk</div>
+            </article>
+            <article class="buku-card expense-card report-tile">
+              <div class="buku-card-top"><span>Total kas keluar (kredit)</span><span class="buku-card-icon icon-out">↙</span></div>
+              <strong class="report-expense buku-expense" id="report-expense">Rp0</strong>
+              <div class="buku-card-sub"><span id="buku-expense-count">0</span> transaksi keluar</div>
+            </article>
+            <article class="buku-card ending-card report-tile">
+              <div class="buku-card-top"><span>Saldo kas akhir</span><span class="buku-card-icon icon-balance">∑</span></div>
+              <strong id="report-balance">Rp0</strong>
+              <div class="buku-card-sub" id="buku-balance-status">Sisa saldo kas</div>
+            </article>
           </div>
-          <article class="panel report-panel"><div class="panel-heading"><div><h2>Rincian per hari</h2><p>Rekap pemasukan dan pengeluaran setiap tanggal.</p></div></div>
-            <div class="table-wrap"><table><thead><tr><th>TANGGAL</th><th class="align-right">PEMASUKAN</th><th class="align-right">PENGELUARAN</th><th class="align-right">SELISIH</th><th class="align-right">TRANSAKSI</th></tr></thead><tbody id="report-rows"></tbody></table></div>
-            <div class="empty-state" id="reports-empty"><span class="empty-icon">▥</span><strong>Belum ada data bulan ini</strong><p>Transaksi harian akan dirangkum otomatis di sini.</p></div>
+          <div class="buku-toolbar">
+            <div class="period-switch buku-tabs" role="group" aria-label="Mode tampilan buku kas">
+              <button class="period-option active" id="btn-mode-ledger" type="button" data-buku-mode="ledger">📖 Buku Kas (Semua Transaksi)</button>
+              <button class="period-option" id="btn-mode-daily" type="button" data-buku-mode="daily">📅 Rekap Harian</button>
+            </div>
+            <div class="buku-count-pill"><span id="report-count">0</span> catatan kas</div>
+          </div>
+          <article class="panel report-panel buku-kas-panel">
+            <div class="panel-heading">
+              <div>
+                <h2 id="buku-panel-title">Buku Kas Umum</h2>
+                <p id="buku-panel-subtitle">Catatan mutasi kas masuk, kas keluar, dan saldo berjalan.</p>
+              </div>
+              <div class="buku-legend">
+                <span class="buku-badge in"><span class="caption-dot green-dot"></span>Debit / Masuk</span>
+                <span class="buku-badge out"><span class="caption-dot orange-dot"></span>Kredit / Keluar</span>
+              </div>
+            </div>
+
+            <!-- Tampilan 1: Buku Kas Ledger -->
+            <div id="buku-ledger-view">
+              <!-- Di HP: Card List ala BukuKas -->
+              <div class="buku-mobile-list" id="buku-mobile-list"></div>
+
+              <!-- Di Desktop & Cetak: Tabel Buku Kas Umum Lengkap -->
+              <div class="table-wrap buku-table-wrap">
+                <table class="buku-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 45px;">NO</th>
+                      <th style="width: 120px;">TANGGAL</th>
+                      <th>KETERANGAN / URAIAN KAS</th>
+                      <th class="align-right" style="width: 135px;">KAS MASUK (DEBIT)</th>
+                      <th class="align-right" style="width: 135px;">KAS KELUAR (KREDIT)</th>
+                      <th class="align-right" style="width: 145px;">SALDO KAS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="buku-ledger-rows"></tbody>
+                  <tfoot id="buku-ledger-foot" class="buku-tfoot"></tfoot>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tampilan 2: Rekap Harian -->
+            <div id="buku-daily-view" hidden>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>TANGGAL</th>
+                      <th class="align-right">KAS MASUK</th>
+                      <th class="align-right">KAS KELUAR</th>
+                      <th class="align-right">SELISIH HARI INI</th>
+                      <th class="align-right">SALDO AKHIR HARI</th>
+                      <th class="align-right">TRANSAKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody id="report-rows"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="empty-state" id="reports-empty">
+              <span class="empty-icon">📖</span>
+              <strong>Belum ada data bulan ini</strong>
+              <p>Transaksi harian akan dirangkum otomatis di sini.</p>
+            </div>
           </article>
           <div class="print-only print-signatures">
             <div class="signature-box">

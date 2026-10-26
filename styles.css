@@ -153,6 +153,216 @@ body{background:#f4f6f2}
 }
 
 /* ================================================================
+   BUKU KAS BULANAN STYLES
+   ================================================================ */
+
+.buku-kas-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.buku-card {
+  background: #ffffff;
+  border: 1px solid #edf0ed;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 114px;
+  box-shadow: 0 2px 8px #243b2d08;
+}
+
+.buku-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #728076;
+}
+
+.buku-card-icon {
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  background: #f0f4f1;
+  color: #386749;
+}
+
+.buku-card-icon.icon-in {
+  background: #eaf5ec;
+  color: #318251;
+}
+
+.buku-card-icon.icon-out {
+  background: #fff4ea;
+  color: #d17537;
+}
+
+.buku-card-icon.icon-balance {
+  background: #eaf1fb;
+  color: #4b78b5;
+}
+
+.buku-card strong {
+  font-family: Manrope, sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  margin: 9px 0 4px;
+  color: #202923;
+  letter-spacing: -0.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.buku-card.starting-card {
+  border-left: 3px solid #6b8274;
+}
+
+.buku-card.income-card {
+  border-left: 3px solid #28764b;
+}
+
+.buku-card.expense-card {
+  border-left: 3px solid #df8042;
+}
+
+.buku-card.ending-card {
+  border-left: 3px solid #1c5236;
+  background: #fbfdfa;
+}
+
+.buku-card-sub {
+  font-size: 10px;
+  color: #879389;
+  font-weight: 500;
+}
+
+.buku-income {
+  color: #28734a !important;
+}
+
+.buku-expense {
+  color: #d37335 !important;
+}
+
+/* Toolbar Buku Kas */
+.buku-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+
+.buku-tabs {
+  display: flex;
+  background: #edf1ec;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.buku-tabs .period-option {
+  padding: 8px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.buku-count-pill {
+  padding: 6px 12px;
+  background: #edf3ee;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2e593d;
+  white-space: nowrap;
+}
+
+.buku-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #6a7b6f;
+}
+
+.buku-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Tabel Buku Kas Umum (Desktop) */
+.buku-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.buku-table thead th {
+  background: #f6f8f5;
+  color: #5d7062;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 10px 12px;
+  border-bottom: 2px solid #e2e8e2;
+  white-space: nowrap;
+}
+
+.buku-table tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf1ee;
+  font-size: 12px;
+  color: #37473b;
+}
+
+.buku-row-no {
+  color: #929e95;
+  text-align: center;
+  font-size: 11px;
+}
+
+.buku-desc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.buku-desc-text {
+  font-weight: 600;
+  color: #213226;
+}
+
+.amount-balance {
+  font-family: Manrope, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a422d;
+  white-space: nowrap;
+}
+
+.buku-tfoot th {
+  background: #f3f7f4;
+  color: #173b2a;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 12px 12px;
+  border-top: 2px solid #cbd7ce;
+  border-bottom: 2px solid #cbd7ce;
+}
+
+/* Mobile Buku Kas List Card (ala BukuKas Android) */
+.buku-mobile-list {
+  display: none;
+}
+
+/* ================================================================
    RESPONSIVE MOBILE / ANDROID OPTIMIZATIONS (<= 768px)
    ================================================================ */
 
@@ -794,10 +1004,169 @@ body{background:#f4f6f2}
     border-radius: 9px;
   }
 
-  .report-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .report-summary,
+  .buku-kas-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-bottom: 14px;
+  }
+
+  .buku-card {
+    padding: 13px 12px;
+    min-height: 108px;
+    border-radius: 12px;
+  }
+
+  .buku-card strong {
+    font-size: 17px;
+    margin: 8px 0 4px;
+  }
+
+  .buku-toolbar {
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
+  }
+
+  .buku-tabs {
+    width: 100%;
+  }
+
+  .buku-tabs .period-option {
+    flex: 1;
+    text-align: center;
+    padding: 9px 0;
+    font-size: 11.5px;
+  }
+
+  .buku-count-pill {
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .buku-legend {
+    display: none;
+  }
+
+  /* Di layar HP Android, sembunyikan tabel lebar dan tampilkan kartu ala BukuKas */
+  .buku-table-wrap {
+    display: none !important;
+  }
+
+  .buku-mobile-list {
+    display: flex !important;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 2px;
+  }
+
+  .buku-card-item {
+    background: #ffffff;
+    border: 1px solid #e7eee7;
+    border-radius: 10px;
+    padding: 12px 13px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    transition: background 0.15s;
+  }
+
+  .buku-card-item.income {
+    border-left: 4px solid #28764b;
+  }
+
+  .buku-card-item.expense {
+    border-left: 4px solid #dd783c;
+  }
+
+  .buku-card-item.initial {
+    border-left: 4px solid #6c8475;
+    background: #fbfdfa;
+  }
+
+  .buku-card-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .buku-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .buku-type-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .buku-type-icon.income {
+    background: #eaf5ec;
+    color: #2b7747;
+  }
+
+  .buku-type-icon.expense {
+    background: #fff4ea;
+    color: #ce7533;
+  }
+
+  .buku-type-icon.balance {
+    background: #eef3ef;
+    color: #4b6b54;
+  }
+
+  .buku-item-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .buku-item-desc {
+    font-size: 13px;
+    font-weight: 600;
+    color: #223026;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .buku-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+    font-size: 11px;
+    color: #828f84;
+  }
+
+  .buku-item-right {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .buku-item-amount {
+    font-family: Manrope, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .buku-item-balance {
+    font-size: 10.5px;
+    color: #79897d;
+    margin-top: 3px;
+  }
+
+  .buku-item-balance strong {
+    color: #17422b;
   }
 
   .report-tile {
@@ -1309,6 +1678,47 @@ body{background:#f4f6f2}
     padding: 30px !important;
     border: 1px dashed #cccccc !important;
     border-radius: 8px !important;
+  }
+
+  /* Print Buku Kas Umum */
+  .buku-toolbar,
+  .buku-legend,
+  .buku-mobile-list,
+  #buku-daily-view {
+    display: none !important;
+  }
+
+  #buku-ledger-view,
+  .buku-table-wrap {
+    display: block !important;
+  }
+
+  .buku-table {
+    display: table !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .buku-table thead th {
+    background: #eaefeb !important;
+    color: #183b2e !important;
+    border: 1px solid #cad4cc !important;
+    font-size: 8.5pt !important;
+    padding: 7px 8px !important;
+  }
+
+  .buku-table tbody td {
+    border: 1px solid #cad4cc !important;
+    font-size: 9pt !important;
+    padding: 6px 8px !important;
+  }
+
+  .buku-tfoot th {
+    background: #edf3ee !important;
+    border: 1px solid #cad4cc !important;
+    font-size: 9.5pt !important;
+    padding: 8px 8px !important;
+    color: #183b2e !important;
   }
 
   /* Formal cooperative signatures block */
