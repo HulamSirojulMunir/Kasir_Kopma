@@ -18,6 +18,7 @@ let receiptOcrWorker = null;
 let tesseractLoadPromise = null;
 let receiptWorkerInitPromise = null;
 let currentOcrCanvas = null;
+let detectedReceiptAmount = null;
 let googleAccessToken = null;
 let googleTokenExpiresAt = 0;
 let googleTokenClient = null;
@@ -617,7 +618,44 @@ function updateTransactionMode() {
   renderSaleCart();
 }
 
+function updateReceiptAmountBadge(amount, isManual = false) {
+  const wrap = document.getElementById("receipt-preview-wrap");
+  if (wrap && wrap.hidden) return;
+  const pill = document.getElementById("receipt-status-pill");
+  const icon = document.getElementById("receipt-status-icon");
+  const text = document.getElementById("receipt-status-text");
+  const statusNote = document.getElementById("receipt-status");
+
+  if (!pill) return;
+
+  if (amount && amount > 0) {
+    if (isManual) {
+      pill.className = "receipt-status-pill status-manual";
+      if (icon) icon.textContent = "✏️";
+      if (text) text.textContent = `Total: ${currency.format(amount)}`;
+      if (statusNote) {
+        statusNote.innerHTML = `Nominal disesuaikan menjadi <strong>${currency.format(amount)}</strong>.`;
+      }
+    } else {
+      pill.className = "receipt-status-pill status-success";
+      if (icon) icon.textContent = "✅";
+      if (text) text.textContent = `Total: ${currency.format(amount)}`;
+      if (statusNote) {
+        statusNote.innerHTML = `Nominal <strong>${currency.format(amount)}</strong> terisi otomatis. Periksa kembali sebelum menyimpan.`;
+      }
+    }
+  } else {
+    pill.className = "receipt-status-pill status-warning";
+    if (icon) icon.textContent = "⚠️";
+    if (text) text.textContent = "Ketik nominal";
+    if (statusNote) {
+      statusNote.textContent = "Ketik nominal belanja nota pada kolom yang tersedia.";
+    }
+  }
+}
+
 function resetReceiptPreview() {
+  detectedReceiptAmount = null;
   const previewWrap = document.getElementById("receipt-preview-wrap");
   if (previewWrap) previewWrap.hidden = true;
   const preview = document.getElementById("receipt-preview");
@@ -634,6 +672,8 @@ function resetReceiptPreview() {
   }
   const removeBtn = document.getElementById("remove-receipt");
   if (removeBtn) removeBtn.hidden = true;
+  const quickAmount = document.getElementById("receipt-quick-amount");
+  if (quickAmount) quickAmount.value = "";
   const pill = document.getElementById("receipt-status-pill");
   if (pill) {
     pill.className = "receipt-status-pill status-ready";
@@ -983,7 +1023,10 @@ async function runOcrOnCurrentReceipt() {
     const parsed = findReceiptData(result && result.data && result.data.text);
 
     if (parsed.amount) {
+      detectedReceiptAmount = parsed.amount;
       document.getElementById("transaction-amount").value = parsed.amount;
+      const quickAmount = document.getElementById("receipt-quick-amount");
+      if (quickAmount) quickAmount.value = parsed.amount;
 
       const amountWrap = document.getElementById("price-input-wrapper");
       if (amountWrap) {
@@ -992,43 +1035,44 @@ async function runOcrOnCurrentReceipt() {
         amountWrap.classList.add("highlight-pulse");
       }
 
+      const quickAmountWrap = document.getElementById("receipt-quick-price-wrapper");
+      if (quickAmountWrap) {
+        quickAmountWrap.classList.remove("highlight-pulse");
+        void quickAmountWrap.offsetWidth;
+        quickAmountWrap.classList.add("highlight-pulse");
+      }
+
       const descInput = document.getElementById("transaction-description");
       if (descInput && !descInput.value.trim()) {
         descInput.value = parsed.merchant ? `Belanja - ${parsed.merchant}` : "Belanja dari nota";
       }
 
-      if (pill) {
-        pill.className = "receipt-status-pill status-success";
-        if (icon) icon.textContent = "✅";
-        if (text) text.textContent = `Total: ${currency.format(parsed.amount)}`;
-      }
-      if (statusNote) {
-        statusNote.textContent = `Nominal ${currency.format(parsed.amount)} terisi otomatis. Periksa kembali sebelum menyimpan.`;
-      }
+      updateReceiptAmountBadge(parsed.amount, false);
       showToast(`✅ Berhasil membaca total: ${currency.format(parsed.amount)}`);
     } else {
-      if (pill) {
-        pill.className = "receipt-status-pill status-warning";
-        if (icon) icon.textContent = "⚠️";
-        if (text) text.textContent = "Total belum terdeteksi";
+      detectedReceiptAmount = null;
+      const quickAmount = document.getElementById("receipt-quick-amount");
+      if (quickAmount) quickAmount.value = "";
+      updateReceiptAmountBadge(0, false);
+      showToast("Total nota tidak terdeteksi. Silakan ketik nominal nota.", true);
+      if (quickAmount) {
+        quickAmount.focus();
+      } else {
+        document.getElementById("transaction-amount").focus();
       }
-      if (statusNote) {
-        statusNote.textContent = "Nominal tidak terbaca jelas. Ketik jumlah secara manual di kolom Jumlah di atas.";
-      }
-      showToast("Total nota tidak terdeteksi. Silakan ketik jumlah secara manual.", true);
-      document.getElementById("transaction-amount").focus();
     }
   } catch (error) {
     console.error("Gagal membaca nota:", error);
+    detectedReceiptAmount = null;
     if (pill) {
       pill.className = "receipt-status-pill status-warning";
       if (icon) icon.textContent = "⚠️";
       if (text) text.textContent = "Gagal membaca nota";
     }
     if (statusNote) {
-      statusNote.textContent = error.message || "Gagal membaca nota. Silakan isi jumlah secara manual.";
+      statusNote.textContent = error.message || "Gagal membaca nota. Silakan isi nominal.";
     }
-    showToast(error.message || "Nota gagal dibaca. Ketik jumlah secara manual.", true);
+    showToast(error.message || "Nota gagal dibaca. Silakan ketik nominal.", true);
   } finally {
     if (laser) laser.hidden = true;
     if (progBar) progBar.hidden = true;
@@ -1237,6 +1281,10 @@ document.getElementById("product-rows").addEventListener("click", (event) => {
 document.getElementById("transaction-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const quickAmount = document.getElementById("receipt-quick-amount");
+  if (quickAmount && quickAmount.value && !form.elements.amount.value) {
+    form.elements.amount.value = quickAmount.value;
+  }
   const isSale = form.elements.type.value === "income" && form.elements.incomeMode.value === "sale";
   const amount = isSale
     ? saleCart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
@@ -1333,6 +1381,45 @@ document.getElementById("scan-receipt").addEventListener("click", () => {
     document.getElementById("receipt-file").click();
   }
 });
+
+// Sinkronisasi dua arah antara input nominal di kartu nota dan kolom Jumlah utama
+const quickAmountInput = document.getElementById("receipt-quick-amount");
+const mainAmountInput = document.getElementById("transaction-amount");
+
+if (quickAmountInput && mainAmountInput) {
+  quickAmountInput.addEventListener("input", () => {
+    mainAmountInput.value = quickAmountInput.value;
+    const val = Number(quickAmountInput.value);
+    const isManual = detectedReceiptAmount === null || val !== detectedReceiptAmount;
+    updateReceiptAmountBadge(val, isManual);
+  });
+
+  mainAmountInput.addEventListener("input", () => {
+    quickAmountInput.value = mainAmountInput.value;
+    const val = Number(mainAmountInput.value);
+    const isManual = detectedReceiptAmount === null || val !== detectedReceiptAmount;
+    updateReceiptAmountBadge(val, isManual);
+  });
+}
+
+// Klik pada badge/status nota untuk langsung mengedit nominal
+const pillEl = document.getElementById("receipt-status-pill");
+if (pillEl) {
+  const triggerEdit = () => {
+    const quickAmount = document.getElementById("receipt-quick-amount");
+    if (quickAmount) {
+      quickAmount.focus();
+      quickAmount.select();
+    }
+  };
+  pillEl.addEventListener("click", triggerEdit);
+  pillEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      triggerEdit();
+    }
+  });
+}
 document.getElementById("transaction-rows").addEventListener("click", openReceiptFromEvent);
 document.getElementById("recent-transactions").addEventListener("click", openReceiptFromEvent);
 document.getElementById("close-receipt-dialog").addEventListener("click", () => document.getElementById("receipt-dialog").close());

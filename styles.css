@@ -228,7 +228,7 @@ body{background:#f4f6f2}
   border-radius: 10px;
   padding: 10px;
   margin-top: 10px;
-  align-items: center;
+  align-items: start;
 }
 
 .receipt-preview-box {
@@ -285,6 +285,18 @@ body{background:#f4f6f2}
   width: fit-content;
   max-width: 100%;
   box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.receipt-status-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.receipt-status-pill:active {
+  transform: translateY(0);
 }
 
 .receipt-status-pill.status-ready {
@@ -298,6 +310,7 @@ body{background:#f4f6f2}
   color: #175496;
   border: 1px solid #c5dbf8;
   animation: scanningPulse 1.2s ease-in-out infinite;
+  cursor: default;
 }
 
 @keyframes scanningPulse {
@@ -311,10 +324,57 @@ body{background:#f4f6f2}
   border: 1px solid #b7e3c5;
 }
 
+.receipt-status-pill.status-manual {
+  background: #eef6ff;
+  color: #125bb5;
+  border: 1px solid #b9d8fc;
+}
+
 .receipt-status-pill.status-warning {
   background: #fef3e2;
   color: #9a4c0a;
   border: 1px solid #fad7a3;
+}
+
+/* Quick Nominal Editor inside receipt feedback */
+.receipt-amount-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.receipt-amount-edit-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #25422e;
+  cursor: pointer;
+}
+
+.receipt-quick-price-input {
+  height: 38px;
+  background: #ffffff;
+  border: 1.5px solid #28764b;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(40, 118, 75, 0.08);
+}
+
+.receipt-quick-price-input span {
+  font-weight: 700;
+  color: #28764b;
+  font-size: 12px;
+}
+
+.receipt-quick-price-input input {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a2c1f;
+}
+
+.receipt-quick-price-input:focus-within {
+  border-color: #1a6b3b;
+  box-shadow: 0 0 0 3px rgba(40, 118, 75, 0.2);
 }
 
 .receipt-progress-bar {
@@ -1574,14 +1634,15 @@ body{background:#f4f6f2}
   }
 
   .receipt-preview-wrap {
-    grid-template-columns: 76px 1fr;
+    grid-template-columns: 80px 1fr;
     gap: 10px;
     padding: 8px;
+    align-items: start;
   }
 
   .receipt-preview-box {
-    width: 76px;
-    height: 96px;
+    width: 80px;
+    height: 105px;
   }
 
   /* Sync & Backup dialog on mobile */

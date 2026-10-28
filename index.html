@@ -292,10 +292,21 @@
                 <div id="receipt-scan-laser" class="receipt-scan-laser" hidden></div>
               </div>
               <div class="receipt-feedback">
-                <div id="receipt-status-pill" class="receipt-status-pill status-ready">
+                <div id="receipt-status-pill" class="receipt-status-pill status-ready" role="button" tabindex="0" title="Klik untuk mengedit nominal">
                   <span id="receipt-status-icon">📷</span>
                   <span id="receipt-status-text">Foto siap</span>
                 </div>
+
+                <div class="receipt-amount-edit-box" id="receipt-amount-edit-box">
+                  <label for="receipt-quick-amount" class="receipt-amount-edit-label">
+                    <span>Nominal nota:</span>
+                  </label>
+                  <div class="price-input receipt-quick-price-input" id="receipt-quick-price-wrapper">
+                    <span>Rp</span>
+                    <input id="receipt-quick-amount" type="number" min="1" step="1" placeholder="0" inputmode="numeric" aria-label="Nominal nota belanja" />
+                  </div>
+                </div>
+
                 <div id="receipt-progress-bar" class="receipt-progress-bar" hidden>
                   <div id="receipt-progress-fill" class="receipt-progress-fill"></div>
                 </div>
@@ -310,7 +321,7 @@
           <label class="field-label" for="transaction-amount">Jumlah</label>
           <div class="price-input" id="price-input-wrapper">
             <span>Rp</span>
-            <input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" />
+            <input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" inputmode="numeric" />
           </div>
         </div>
         <label class="field-label" for="transaction-date">Tanggal</label><input id="transaction-date" class="input" name="date" type="date" required />
