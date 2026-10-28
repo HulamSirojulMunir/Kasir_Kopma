@@ -268,18 +268,14 @@
               <span class="field-label">Foto nota & auto-baca <span class="field-hint">Otomatis</span></span>
               <span class="receipt-badge">⚡ Auto OCR</span>
             </div>
-            <p class="receipt-help">Ambil foto nota dengan kamera atau pilih dari galeri. Total belanja akan <strong>langsung dibaca dan terisi otomatis</strong>.</p>
+            <p class="receipt-help">Pilih foto dari galeri atau ambil foto langsung dengan kamera. Total belanja akan <strong>otomatis dibaca dan diisikan</strong> ke kolom Jumlah.</p>
             
-            <!-- Hidden inputs kamera & file picker -->
-            <input id="receipt-camera" type="file" accept="image/*" capture="environment" hidden />
+            <!-- Hidden input file picker (membuka pilihan Kamera / Galeri langsung di HP) -->
             <input id="receipt-file" type="file" accept="image/*" hidden />
             
             <div class="receipt-actions">
-              <button id="btn-camera-receipt" class="button button-primary receipt-btn-camera" type="button">
-                <span class="button-icon">📷</span> Ambil foto nota
-              </button>
-              <button id="btn-file-receipt" class="button button-secondary receipt-btn-file" type="button">
-                <span class="button-icon">📁</span> Galeri / file
+              <button id="btn-file-receipt" class="button button-primary receipt-btn-main" type="button">
+                <span class="button-icon">📷</span> Ambil foto / pilih dari galeri
               </button>
               <button id="scan-receipt" class="button button-secondary receipt-btn-rescan" type="button" hidden>
                 🔄 Pindai ulang

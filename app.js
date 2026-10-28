@@ -16,6 +16,8 @@ let saleCart = [];
 let receiptImage = null;
 let receiptOcrWorker = null;
 let tesseractLoadPromise = null;
+let receiptWorkerInitPromise = null;
+let currentOcrCanvas = null;
 let googleAccessToken = null;
 let googleTokenExpiresAt = 0;
 let googleTokenClient = null;
@@ -615,11 +617,6 @@ function updateTransactionMode() {
   renderSaleCart();
 }
 
-let tesseractLoadPromise = null;
-let receiptOcrWorker = null;
-let receiptWorkerInitPromise = null;
-let currentOcrCanvas = null;
-
 function resetReceiptPreview() {
   const previewWrap = document.getElementById("receipt-preview-wrap");
   if (previewWrap) previewWrap.hidden = true;
@@ -677,18 +674,22 @@ function prepareReceiptImages(file) {
       const ocrCtx = ocrCanvas.getContext("2d", { willReadFrequently: true });
       ocrCtx.drawImage(image, 0, 0, ocrCanvas.width, ocrCanvas.height);
 
-      // Tingkatkan kontras dan ketajaman teks nota
+      // Tingkatkan kontras dengan auto-levels berbasis rentang kecerahan gambar asli
       try {
         const imgData = ocrCtx.getImageData(0, 0, ocrCanvas.width, ocrCanvas.height);
         const data = imgData.data;
+        let minLum = 255;
+        let maxLum = 0;
+        for (let i = 0; i < data.length; i += 16) {
+          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          if (lum < minLum) minLum = lum;
+          if (lum > maxLum) maxLum = lum;
+        }
+        const range = Math.max(40, maxLum - minLum);
         for (let i = 0; i < data.length; i += 4) {
           const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-          let val = lum;
-          if (lum < 115) {
-            val = lum * 0.72; // pekatkan tulisan gelap
-          } else if (lum > 140) {
-            val = Math.min(255, lum * 1.18); // cerahkan kertas nota
-          }
+          const norm = Math.max(0, Math.min(255, ((lum - minLum) / range) * 255));
+          const val = norm < 125 ? Math.max(0, norm * 0.75) : Math.min(255, norm * 1.15);
           data[i] = val;
           data[i + 1] = val;
           data[i + 2] = val;
@@ -714,104 +715,149 @@ function findReceiptData(rawText) {
   const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return { amount: null, merchant: null };
 
-  // Deteksi nama toko/merchant dari 4 baris teratas
+  // 1. Deteksi nama toko/merchant dari 4 baris teratas
   let merchant = null;
   const topLines = lines.slice(0, 4);
   for (const line of topLines) {
     const clean = line.replace(/[^a-zA-Z0-9\s&.-]/g, "").trim();
-    if (clean.length >= 3 && clean.length <= 40 && !/\d{5,}/.test(clean) && !/tanggal|waktu|kasir|struk|nota|order|receipt|meja|pos|invoice/i.test(clean)) {
+    if (
+      clean.length >= 3 &&
+      clean.length <= 40 &&
+      !/\d{5,}/.test(clean) &&
+      !/tanggal|waktu|date|time|cashier|kasir|struk|nota|order|receipt|meja|pos|pax|invoice|faktur/i.test(clean)
+    ) {
       merchant = clean;
       break;
     }
   }
 
-  // Pola kata kunci nota kasir & nota kontan Indonesia
-  const highKw = /(?:grand\s*total|g[\.\s]*total|total\s*(?:belanja|bayar|tagihan|akhir|harga|keseluruhan|pembayaran)|jumlah\s*(?:total|belanja|bayar|tagihan|keseluruhan)|t[o0]t[a4][l1i]\s*(?:belanja|bayar|tagihan)?)/i;
-  const mediumKw = /\b(?:total|t[o0]t[a4][l1i]|jumlah|jml|juml4h|jumi_ah|tagihan|dibayar|bayar|netto|net)\b/i;
-  const subtotalKw = /\b(?:subtotal|sub\s*total|sub-total)\b/i;
-  const cashKw = /\b(?:tunai|cash)\b/i;
-  const negativeKw = /\b(?:kembali|kembalian|change|diskon|discount|hemat|potongan)\b/i;
+  // 2. Format nominal mata uang ketat (mencegah penggabungan angka dengan teks acak di sebelahnya)
+  // Cocok dengan: 17.000, 17,000, Rp 17.000, 17000
+  const numRegex = /(?:rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d{3,8})/gi;
 
-  const numberPattern = /(?:rp\.?\s*)?(\d[\d\.,\s]{1,16}\d|\d+)(?:\s*[,-])?/gi;
-
-  function extractNumbers(lineStr) {
-    const found = [];
-    const matches = [...lineStr.matchAll(numberPattern)];
+  function extractNumbers(str) {
+    const list = [];
+    const matches = [...str.matchAll(numRegex)];
     for (const m of matches) {
-      let s = m[1].trim();
+      let valStr = m[1].trim();
       // Potong desimal sen ,00 atau .00 jika ada
-      if (/[.,]00$/.test(s)) {
-        s = s.slice(0, -3);
+      if (/[.,]00$/.test(valStr)) {
+        valStr = valStr.slice(0, -3);
       }
-      const digits = s.replace(/[^\d]/g, "");
-      if (digits && digits.length <= 10) {
+      const digits = valStr.replace(/[^\d]/g, "");
+      if (digits && digits.length <= 8) {
         const val = Number(digits);
-        // Rentang nominal belanja wajar: Rp 500 sampai Rp 100.000.000
-        if (Number.isSafeInteger(val) && val >= 500 && val <= 100000000) {
-          // Hindari no HP yang diawali 08 (panjang >= 10)
+        // Rentang belanja wajar: Rp 500 sampai Rp 50.000.000
+        if (Number.isSafeInteger(val) && val >= 500 && val <= 50000000) {
           if (!digits.startsWith("08") || digits.length < 10) {
-            found.push(val);
+            list.push(val);
           }
         }
       }
     }
-    return found;
+    return list;
   }
+
+  // 3. Deteksi CASH / TUNAI dan CHANGE / KEMBALI
+  // Jika pembeli membayar tunai dan ada kembalian: Total = Cash - Change! (Contoh: Cash 20.000 - Change 3.000 = 17.000)
+  let cashAmount = null;
+  let changeAmount = null;
+
+  for (const line of lines) {
+    if (/\b(?:cash|tunai|bayar\s*tunai)\b/i.test(line) && !/\b(?:kembali|kembalian|change)\b/i.test(line)) {
+      const nums = extractNumbers(line);
+      if (nums.length) cashAmount = nums[nums.length - 1];
+    } else if (/\b(?:change|kembali|kembalian)\b/i.test(line)) {
+      const nums = extractNumbers(line);
+      if (nums.length) changeAmount = nums[nums.length - 1];
+    }
+  }
+
+  let calculatedTotal = null;
+  if (cashAmount && changeAmount && cashAmount > changeAmount) {
+    calculatedTotal = cashAmount - changeAmount;
+  }
+
+  // 4. Pola kata kunci Total
+  const kwGrand = /\b(?:grand\s*total|g[\.\s-]*total|total\s*akhir|total\s*belanja|total\s*bayar|total\s*tagihan|jumlah\s*total)\b/i;
+  const kwTotal = /\b(?:total|t[o0]t[a4][l1i]|jumlah|jml|tagihan|netto|net)\b/i;
+  const kwSubtotal = /\b(?:sub\s*total|subtotal|sub-total)\b/i;
 
   const candidates = [];
 
-  // Tahap 1: Pencocokan baris per baris berdasarkan kata kunci
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const isNegative = negativeKw.test(line);
-    const hasHigh = highKw.test(line);
-    const hasMedium = mediumKw.test(line);
-    const hasSub = subtotalKw.test(line);
-    const hasCash = cashKw.test(line);
+
+    // Lewati baris barcode, nomor struk/receipt #, printed, powered by
+    if (/receipt\s*#|invoice|faktur|pajak|tax|npwp|telp|phone|powered\s*by|printed/i.test(line)) {
+      continue;
+    }
+
+    // JANGAN pilih baris CASH / TUNAI / KEMBALI murni sebagai total
+    if (/\b(?:cash|tunai|change|kembali|kembalian|diskon|discount|hemat)\b/i.test(line) && !kwGrand.test(line) && !kwTotal.test(line)) {
+      continue;
+    }
 
     let nums = extractNumbers(line);
 
     // Multi-baris: jika kata kunci di baris i dan nominal di baris i+1
-    if ((hasHigh || hasMedium) && !nums.length && i + 1 < lines.length) {
+    if (!nums.length && i + 1 < lines.length && (kwGrand.test(line) || kwTotal.test(line) || kwSubtotal.test(line))) {
       const nextNums = extractNumbers(lines[i + 1]);
       if (nextNums.length) nums = nextNums;
     }
 
-    if (nums.length) {
-      let score = 0;
-      if (hasHigh) score = 10;
-      else if (hasMedium) score = 8;
-      else if (hasSub) score = 5;
-      else if (hasCash) score = 3;
+    if (!nums.length) continue;
 
-      if (isNegative && !hasHigh) {
-        score = -1; // lewati uang kembali
-      }
+    const val = nums[nums.length - 1];
+    let score = 0;
 
-      if (score > 0) {
-        // Angka terakhir pada baris total biasanya adalah nominal final
-        candidates.push({ amount: nums[nums.length - 1], score, line });
-      }
+    if (kwGrand.test(line)) {
+      score = 100;
+    } else if (kwTotal.test(line)) {
+      score = 70;
+    } else if (kwSubtotal.test(line)) {
+      score = 50;
+    }
+
+    // Bonus jika nilainya cocok dengan rumus matematika (Cash - Change)
+    if (calculatedTotal && val === calculatedTotal) {
+      score += 50;
+    }
+
+    if (score > 0) {
+      candidates.push({
+        amount: val,
+        score,
+        lineIndex: i,
+        line
+      });
     }
   }
 
+  // Urutkan berdasarkan skor kata kunci tertinggi, lalu baris yang paling bawah
   if (candidates.length) {
-    candidates.sort((a, b) => b.score - a.score || b.amount - a.amount);
+    candidates.sort((a, b) => b.score - a.score || b.lineIndex - a.lineIndex);
     return { amount: candidates[0].amount, merchant, confidence: "high" };
   }
 
-  // Tahap 2 (Fallback): Cari angka terbesar di 60% bagian bawah nota
-  const startIndex = Math.floor(lines.length * 0.4);
+  // Jika kata kunci buram/terpotong, gunakan hasil hitung pasti (Cash - Change)
+  if (calculatedTotal) {
+    return { amount: calculatedTotal, merchant, confidence: "high" };
+  }
+
+  // Fallback: cari angka nominal wajar di area bawah nota sebelum footer
+  const startIndex = Math.floor(lines.length * 0.35);
   const bottomNums = [];
   for (let i = startIndex; i < lines.length; i++) {
-    if (negativeKw.test(lines[i])) continue;
-    for (const val of extractNumbers(lines[i])) {
+    const line = lines[i];
+    if (/receipt\s*#|printed|powered|telp|npwp|cash|tunai|change|kembali/i.test(line)) continue;
+    for (const val of extractNumbers(line)) {
       bottomNums.push({ amount: val, lineIndex: i });
     }
   }
 
   if (bottomNums.length) {
-    bottomNums.sort((a, b) => b.amount - a.amount || b.lineIndex - a.lineIndex);
+    bottomNums.sort((a, b) => b.lineIndex - a.lineIndex);
     return { amount: bottomNums[0].amount, merchant, confidence: "medium" };
   }
 
@@ -860,6 +906,14 @@ async function getReceiptWorker(onProgress) {
             }
           }
         });
+        // Atur PSM 6 agar membaca baris nota secara horizontal menyatu (kiri dan kanan tetap 1 baris)
+        try {
+          await worker.setParameters({
+            tessedit_pageseg_mode: "6"
+          });
+        } catch (paramErr) {
+          console.warn("Set PSM parameter skipped:", paramErr);
+        }
         receiptOcrWorker = worker;
         return worker;
       } catch (err) {
@@ -1240,7 +1294,7 @@ document.getElementById("transaction-type").addEventListener("change", updateTra
 document.getElementById("income-mode").addEventListener("change", updateTransactionMode);
 const btnCamera = document.getElementById("btn-camera-receipt");
 if (btnCamera) {
-  btnCamera.addEventListener("click", () => document.getElementById("receipt-camera").click());
+  btnCamera.addEventListener("click", () => document.getElementById("receipt-file").click());
 }
 
 const btnFile = document.getElementById("btn-file-receipt");
@@ -1276,7 +1330,7 @@ document.getElementById("scan-receipt").addEventListener("click", () => {
   if (currentOcrCanvas || receiptImage) {
     runOcrOnCurrentReceipt();
   } else {
-    document.getElementById("receipt-camera").click();
+    document.getElementById("receipt-file").click();
   }
 });
 document.getElementById("transaction-rows").addEventListener("click", openReceiptFromEvent);
