@@ -571,6 +571,7 @@ function openTransaction(type) {
   const form = document.getElementById("transaction-form");
   form.reset();
   receiptImage = null;
+  currentOcrCanvas = null;
   resetReceiptPreview();
   form.elements.date.value = today;
   if (type === "income" || type === "expense") form.elements.type.value = type;
@@ -578,6 +579,9 @@ function openTransaction(type) {
   renderSaleProductOptions();
   updateTransactionMode();
   document.getElementById("transaction-dialog").showModal();
+  if (form.elements.type.value === "expense") {
+    preloadReceiptOcr();
+  }
   if (window.innerWidth > 768 && form.elements.type.value === "income" && document.getElementById("income-mode").value === "sale") {
     document.getElementById("sale-product-select").focus();
   } else {
@@ -603,72 +607,215 @@ function updateTransactionMode() {
   document.getElementById("sale-panel").hidden = !isSale;
   document.getElementById("transaction-manual-fields").hidden = isSale;
   document.getElementById("expense-receipt-panel").hidden = !(!isSale && !isIncome);
+  if (!isSale && !isIncome) {
+    preloadReceiptOcr();
+  }
   document.getElementById("transaction-description").required = !isSale;
   document.getElementById("transaction-amount").required = !isSale;
   renderSaleCart();
 }
 
+let tesseractLoadPromise = null;
+let receiptOcrWorker = null;
+let receiptWorkerInitPromise = null;
+let currentOcrCanvas = null;
+
 function resetReceiptPreview() {
+  const previewWrap = document.getElementById("receipt-preview-wrap");
+  if (previewWrap) previewWrap.hidden = true;
   const preview = document.getElementById("receipt-preview");
-  preview.removeAttribute("src");
-  preview.hidden = true;
-  document.getElementById("scan-receipt").disabled = true;
-  document.getElementById("remove-receipt").hidden = true;
-  document.getElementById("receipt-status").textContent = "Foto nota tersimpan di perangkat ini, tidak ikut tersinkron ke Google Sheets.";
+  if (preview) preview.removeAttribute("src");
+  const laser = document.getElementById("receipt-scan-laser");
+  if (laser) laser.hidden = true;
+  const progBar = document.getElementById("receipt-progress-bar");
+  if (progBar) progBar.hidden = true;
+  const scanBtn = document.getElementById("scan-receipt");
+  if (scanBtn) {
+    scanBtn.hidden = true;
+    scanBtn.disabled = false;
+    scanBtn.textContent = "🔄 Pindai ulang";
+  }
+  const removeBtn = document.getElementById("remove-receipt");
+  if (removeBtn) removeBtn.hidden = true;
+  const pill = document.getElementById("receipt-status-pill");
+  if (pill) {
+    pill.className = "receipt-status-pill status-ready";
+    const icon = document.getElementById("receipt-status-icon");
+    if (icon) icon.textContent = "📷";
+    const text = document.getElementById("receipt-status-text");
+    if (text) text.textContent = "Foto siap";
+  }
+  const statusEl = document.getElementById("receipt-status");
+  if (statusEl) statusEl.textContent = "Foto nota tersimpan di perangkat ini.";
 }
 
-function resizeReceiptImage(file) {
+function prepareReceiptImages(file) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.naturalWidth * scale);
-      canvas.height = Math.round(image.naturalHeight * scale);
-      const context = canvas.getContext("2d");
-      if (!context) {
-        reject(new Error("Foto nota tidak dapat diproses di browser ini."));
+
+      // 1. Storage image: Clean JPEG max 1200px (ramah kapasitas localStorage)
+      const displayScale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
+      const displayCanvas = document.createElement("canvas");
+      displayCanvas.width = Math.round(image.naturalWidth * displayScale);
+      displayCanvas.height = Math.round(image.naturalHeight * displayScale);
+      const displayCtx = displayCanvas.getContext("2d");
+      if (!displayCtx) {
+        reject(new Error("Browser tidak dapat memproses gambar."));
         return;
       }
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
+      displayCtx.drawImage(image, 0, 0, displayCanvas.width, displayCanvas.height);
+      const storageDataUrl = displayCanvas.toDataURL("image/jpeg", 0.78);
+
+      // 2. OCR image: High-contrast canvas max 1800px untuk ketajaman font nota
+      const ocrScale = Math.min(1, 1800 / Math.max(image.naturalWidth, image.naturalHeight));
+      const ocrCanvas = document.createElement("canvas");
+      ocrCanvas.width = Math.round(image.naturalWidth * ocrScale);
+      ocrCanvas.height = Math.round(image.naturalHeight * ocrScale);
+      const ocrCtx = ocrCanvas.getContext("2d", { willReadFrequently: true });
+      ocrCtx.drawImage(image, 0, 0, ocrCanvas.width, ocrCanvas.height);
+
+      // Tingkatkan kontras dan ketajaman teks nota
+      try {
+        const imgData = ocrCtx.getImageData(0, 0, ocrCanvas.width, ocrCanvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          let val = lum;
+          if (lum < 115) {
+            val = lum * 0.72; // pekatkan tulisan gelap
+          } else if (lum > 140) {
+            val = Math.min(255, lum * 1.18); // cerahkan kertas nota
+          }
+          data[i] = val;
+          data[i + 1] = val;
+          data[i + 2] = val;
+        }
+        ocrCtx.putImageData(imgData, 0, 0);
+      } catch (e) {
+        console.warn("OCR image enhancement skipped:", e);
+      }
+
+      resolve({ storageDataUrl, ocrCanvas });
     };
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error("Foto nota tidak dapat dibuka. Coba gunakan foto JPG, PNG, atau WebP."));
+      reject(new Error("Foto tidak dapat dibuka. Gunakan format JPG, PNG, atau WebP."));
     };
     image.src = objectUrl;
   });
 }
 
-function findReceiptTotal(text) {
-  const candidates = [];
-  for (const line of text.split(/\r?\n/)) {
-    const normalized = line.toLocaleLowerCase("id").replace(/\s+/g, " ").trim();
-    if (!normalized || /subtotal|sub total|kembali|change|tunai|cash|diskon|discount|ppn|pajak|tax/.test(normalized)) continue;
-    const matches = [...normalized.matchAll(/(?:rp\.?\s*)?(\d[\d.,\s]{0,15}\d|\d)/gi)];
-    let score = 0;
-    if (/grand\s*total|total\s*(?:belanja|pembayaran|bayar|tagihan)|jumlah\s*total/.test(normalized)) score = 4;
-    else if (/\btotal\b/.test(normalized)) score = 3;
-    else if (/\btagihan\b|\bbayar\b/.test(normalized)) score = 2;
-    if (!score || !matches.length) continue;
-    const amountText = matches[matches.length - 1][1].replace(/\s/g, "").replace(/[.,]\d{2}$/, "");
-    const amount = Number(amountText.replace(/[^\d]/g, ""));
-    if (Number.isSafeInteger(amount) && amount > 0) candidates.push({ amount, score });
-  }
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0]?.amount ?? null;
-}
+function findReceiptData(rawText) {
+  if (!rawText || typeof rawText !== "string") return { amount: null, merchant: null };
 
-function openReceiptFromEvent(event) {
-  const button = event.target.closest("[data-view-receipt]");
-  if (!button) return;
-  const transaction = state.transactions.find((item) => item.id === button.dataset.viewReceipt);
-  if (!transaction?.receiptImage) return;
-  document.getElementById("receipt-view-image").src = transaction.receiptImage;
-  document.getElementById("receipt-dialog").showModal();
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return { amount: null, merchant: null };
+
+  // Deteksi nama toko/merchant dari 4 baris teratas
+  let merchant = null;
+  const topLines = lines.slice(0, 4);
+  for (const line of topLines) {
+    const clean = line.replace(/[^a-zA-Z0-9\s&.-]/g, "").trim();
+    if (clean.length >= 3 && clean.length <= 40 && !/\d{5,}/.test(clean) && !/tanggal|waktu|kasir|struk|nota|order|receipt|meja|pos|invoice/i.test(clean)) {
+      merchant = clean;
+      break;
+    }
+  }
+
+  // Pola kata kunci nota kasir & nota kontan Indonesia
+  const highKw = /(?:grand\s*total|g[\.\s]*total|total\s*(?:belanja|bayar|tagihan|akhir|harga|keseluruhan|pembayaran)|jumlah\s*(?:total|belanja|bayar|tagihan|keseluruhan)|t[o0]t[a4][l1i]\s*(?:belanja|bayar|tagihan)?)/i;
+  const mediumKw = /\b(?:total|t[o0]t[a4][l1i]|jumlah|jml|juml4h|jumi_ah|tagihan|dibayar|bayar|netto|net)\b/i;
+  const subtotalKw = /\b(?:subtotal|sub\s*total|sub-total)\b/i;
+  const cashKw = /\b(?:tunai|cash)\b/i;
+  const negativeKw = /\b(?:kembali|kembalian|change|diskon|discount|hemat|potongan)\b/i;
+
+  const numberPattern = /(?:rp\.?\s*)?(\d[\d\.,\s]{1,16}\d|\d+)(?:\s*[,-])?/gi;
+
+  function extractNumbers(lineStr) {
+    const found = [];
+    const matches = [...lineStr.matchAll(numberPattern)];
+    for (const m of matches) {
+      let s = m[1].trim();
+      // Potong desimal sen ,00 atau .00 jika ada
+      if (/[.,]00$/.test(s)) {
+        s = s.slice(0, -3);
+      }
+      const digits = s.replace(/[^\d]/g, "");
+      if (digits && digits.length <= 10) {
+        const val = Number(digits);
+        // Rentang nominal belanja wajar: Rp 500 sampai Rp 100.000.000
+        if (Number.isSafeInteger(val) && val >= 500 && val <= 100000000) {
+          // Hindari no HP yang diawali 08 (panjang >= 10)
+          if (!digits.startsWith("08") || digits.length < 10) {
+            found.push(val);
+          }
+        }
+      }
+    }
+    return found;
+  }
+
+  const candidates = [];
+
+  // Tahap 1: Pencocokan baris per baris berdasarkan kata kunci
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isNegative = negativeKw.test(line);
+    const hasHigh = highKw.test(line);
+    const hasMedium = mediumKw.test(line);
+    const hasSub = subtotalKw.test(line);
+    const hasCash = cashKw.test(line);
+
+    let nums = extractNumbers(line);
+
+    // Multi-baris: jika kata kunci di baris i dan nominal di baris i+1
+    if ((hasHigh || hasMedium) && !nums.length && i + 1 < lines.length) {
+      const nextNums = extractNumbers(lines[i + 1]);
+      if (nextNums.length) nums = nextNums;
+    }
+
+    if (nums.length) {
+      let score = 0;
+      if (hasHigh) score = 10;
+      else if (hasMedium) score = 8;
+      else if (hasSub) score = 5;
+      else if (hasCash) score = 3;
+
+      if (isNegative && !hasHigh) {
+        score = -1; // lewati uang kembali
+      }
+
+      if (score > 0) {
+        // Angka terakhir pada baris total biasanya adalah nominal final
+        candidates.push({ amount: nums[nums.length - 1], score, line });
+      }
+    }
+  }
+
+  if (candidates.length) {
+    candidates.sort((a, b) => b.score - a.score || b.amount - a.amount);
+    return { amount: candidates[0].amount, merchant, confidence: "high" };
+  }
+
+  // Tahap 2 (Fallback): Cari angka terbesar di 60% bagian bawah nota
+  const startIndex = Math.floor(lines.length * 0.4);
+  const bottomNums = [];
+  for (let i = startIndex; i < lines.length; i++) {
+    if (negativeKw.test(lines[i])) continue;
+    for (const val of extractNumbers(lines[i])) {
+      bottomNums.push({ amount: val, lineIndex: i });
+    }
+  }
+
+  if (bottomNums.length) {
+    bottomNums.sort((a, b) => b.amount - a.amount || b.lineIndex - a.lineIndex);
+    return { amount: bottomNums[0].amount, merchant, confidence: "medium" };
+  }
+
+  return { amount: null, merchant, confidence: "none" };
 }
 
 function loadTesseract() {
@@ -677,6 +824,7 @@ function loadTesseract() {
     tesseractLoadPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      script.async = true;
       script.onload = () => resolve(window.Tesseract);
       script.onerror = () => {
         tesseractLoadPromise = null;
@@ -688,40 +836,201 @@ function loadTesseract() {
   return tesseractLoadPromise;
 }
 
-async function scanReceipt() {
-  const status = document.getElementById("receipt-status");
-  const scanButton = document.getElementById("scan-receipt");
-  scanButton.disabled = true;
-  status.textContent = "Sedang membaca tulisan pada nota...";
-  try {
+async function getReceiptWorker(onProgress) {
+  if (receiptOcrWorker) return receiptOcrWorker;
+  if (receiptWorkerInitPromise) return receiptWorkerInitPromise;
+
+  receiptWorkerInitPromise = (async () => {
     const tesseract = await loadTesseract();
-    if (!receiptOcrWorker) {
-      receiptOcrWorker = await tesseract.createWorker("ind", 1, {
-        langPath: "https://tessdata.projectnaptha.com/4.0.0",
-        logger: (message) => {
-          if (message.status === "recognizing text") status.textContent = `Membaca nota... ${Math.round(message.progress * 100)}%`;
-        }
-      });
+    const attempts = [
+      { lang: "ind", path: "https://tessdata.projectnaptha.com/4.0.0_fast" },
+      { lang: "ind", path: "https://cdn.jsdelivr.net/gh/naptha/tessdata@gh-pages/4.0.0_fast" },
+      { lang: "eng", path: "https://cdn.jsdelivr.net/gh/naptha/tessdata@gh-pages/4.0.0_fast" },
+      { lang: "eng", path: "https://tessdata.projectnaptha.com/4.0.0_fast" }
+    ];
+
+    let lastErr = null;
+    for (const attempt of attempts) {
+      try {
+        const worker = await tesseract.createWorker(attempt.lang, 1, {
+          langPath: attempt.path,
+          logger: (m) => {
+            if (typeof onProgress === "function" && m.status === "recognizing text") {
+              onProgress(Math.round((m.progress || 0) * 100));
+            }
+          }
+        });
+        receiptOcrWorker = worker;
+        return worker;
+      } catch (err) {
+        console.warn(`Worker init failed (${attempt.lang} at ${attempt.path}):`, err);
+        lastErr = err;
+      }
     }
-    const result = await receiptOcrWorker.recognize(receiptImage);
-    const amount = findReceiptTotal(result.data.text);
-    if (!amount) {
-      status.textContent = "Total belum terbaca. Isi jumlah secara manual atau foto ulang nota dengan lebih jelas.";
-      showToast("Total nota tidak terdeteksi. Silakan periksa dan isi jumlahnya sendiri.", true);
-      return;
-    }
-    document.getElementById("transaction-amount").value = amount;
-    if (!document.getElementById("transaction-description").value.trim()) {
-      document.getElementById("transaction-description").value = "Belanja dari nota";
-    }
-    status.textContent = `Terbaca ${currency.format(amount)}. Periksa nominal sebelum menyimpan.`;
-  } catch (error) {
-    console.error("Foto nota tidak dapat dibaca.", error);
-    status.textContent = error.message || "Nota gagal dibaca. Isi jumlah secara manual.";
-    showToast(error.message || "Nota gagal dibaca. Isi jumlah secara manual.", true);
-  } finally {
-    scanButton.disabled = false;
+    throw lastErr || new Error("Gagal mengaktifkan pembaca nota.");
+  })();
+
+  try {
+    return await receiptWorkerInitPromise;
+  } catch (err) {
+    receiptWorkerInitPromise = null;
+    throw err;
   }
+}
+
+function preloadReceiptOcr() {
+  if (receiptOcrWorker || receiptWorkerInitPromise) return;
+  if (!window.Tesseract) {
+    loadTesseract()
+      .then(() => setTimeout(() => getReceiptWorker().catch(() => {}), 400))
+      .catch(() => {});
+  } else {
+    setTimeout(() => getReceiptWorker().catch(() => {}), 300);
+  }
+}
+
+async function runOcrOnCurrentReceipt() {
+  if (!currentOcrCanvas && !receiptImage) return;
+  const imageSource = currentOcrCanvas || receiptImage;
+
+  const pill = document.getElementById("receipt-status-pill");
+  const icon = document.getElementById("receipt-status-icon");
+  const text = document.getElementById("receipt-status-text");
+  const statusNote = document.getElementById("receipt-status");
+  const laser = document.getElementById("receipt-scan-laser");
+  const progBar = document.getElementById("receipt-progress-bar");
+  const progFill = document.getElementById("receipt-progress-fill");
+  const scanBtn = document.getElementById("scan-receipt");
+
+  if (laser) laser.hidden = false;
+  if (progBar) progBar.hidden = false;
+  if (progFill) progFill.style.width = "10%";
+  if (scanBtn) {
+    scanBtn.hidden = false;
+    scanBtn.disabled = true;
+    scanBtn.textContent = "Sedang membaca...";
+  }
+
+  if (pill) {
+    pill.className = "receipt-status-pill status-scanning";
+    if (icon) icon.textContent = "⚡";
+    if (text) text.textContent = "Membaca nota otomatis...";
+  }
+  if (statusNote) statusNote.textContent = "Menganalisis teks nota dan mencari nominal total...";
+
+  try {
+    const worker = await getReceiptWorker((pct) => {
+      if (progFill) progFill.style.width = `${Math.max(15, pct)}%`;
+      if (text) text.textContent = `Membaca nota... ${pct}%`;
+    });
+
+    if (progFill) progFill.style.width = "90%";
+    const result = await worker.recognize(imageSource);
+    const parsed = findReceiptData(result && result.data && result.data.text);
+
+    if (parsed.amount) {
+      document.getElementById("transaction-amount").value = parsed.amount;
+
+      const amountWrap = document.getElementById("price-input-wrapper");
+      if (amountWrap) {
+        amountWrap.classList.remove("highlight-pulse");
+        void amountWrap.offsetWidth;
+        amountWrap.classList.add("highlight-pulse");
+      }
+
+      const descInput = document.getElementById("transaction-description");
+      if (descInput && !descInput.value.trim()) {
+        descInput.value = parsed.merchant ? `Belanja - ${parsed.merchant}` : "Belanja dari nota";
+      }
+
+      if (pill) {
+        pill.className = "receipt-status-pill status-success";
+        if (icon) icon.textContent = "✅";
+        if (text) text.textContent = `Total: ${currency.format(parsed.amount)}`;
+      }
+      if (statusNote) {
+        statusNote.textContent = `Nominal ${currency.format(parsed.amount)} terisi otomatis. Periksa kembali sebelum menyimpan.`;
+      }
+      showToast(`✅ Berhasil membaca total: ${currency.format(parsed.amount)}`);
+    } else {
+      if (pill) {
+        pill.className = "receipt-status-pill status-warning";
+        if (icon) icon.textContent = "⚠️";
+        if (text) text.textContent = "Total belum terdeteksi";
+      }
+      if (statusNote) {
+        statusNote.textContent = "Nominal tidak terbaca jelas. Ketik jumlah secara manual di kolom Jumlah di atas.";
+      }
+      showToast("Total nota tidak terdeteksi. Silakan ketik jumlah secara manual.", true);
+      document.getElementById("transaction-amount").focus();
+    }
+  } catch (error) {
+    console.error("Gagal membaca nota:", error);
+    if (pill) {
+      pill.className = "receipt-status-pill status-warning";
+      if (icon) icon.textContent = "⚠️";
+      if (text) text.textContent = "Gagal membaca nota";
+    }
+    if (statusNote) {
+      statusNote.textContent = error.message || "Gagal membaca nota. Silakan isi jumlah secara manual.";
+    }
+    showToast(error.message || "Nota gagal dibaca. Ketik jumlah secara manual.", true);
+  } finally {
+    if (laser) laser.hidden = true;
+    if (progBar) progBar.hidden = true;
+    if (scanBtn) {
+      scanBtn.hidden = false;
+      scanBtn.disabled = false;
+      scanBtn.textContent = "🔄 Pindai ulang";
+    }
+  }
+}
+
+async function processAndScanReceipt(file) {
+  const previewWrap = document.getElementById("receipt-preview-wrap");
+  const preview = document.getElementById("receipt-preview");
+  const pill = document.getElementById("receipt-status-pill");
+  const icon = document.getElementById("receipt-status-icon");
+  const text = document.getElementById("receipt-status-text");
+  const statusNote = document.getElementById("receipt-status");
+  const removeBtn = document.getElementById("remove-receipt");
+
+  if (previewWrap) previewWrap.hidden = false;
+  if (removeBtn) removeBtn.hidden = false;
+  if (pill) {
+    pill.className = "receipt-status-pill status-scanning";
+    if (icon) icon.textContent = "⏳";
+    if (text) text.textContent = "Menyiapkan foto...";
+  }
+  if (statusNote) statusNote.textContent = "Memproses resolusi dan ketajaman foto nota...";
+
+  try {
+    const { storageDataUrl, ocrCanvas } = await prepareReceiptImages(file);
+    receiptImage = storageDataUrl;
+    currentOcrCanvas = ocrCanvas;
+
+    if (preview) {
+      preview.src = storageDataUrl;
+    }
+
+    // Jalankan auto-baca langsung tanpa perlu klik tombol lagi!
+    await runOcrOnCurrentReceipt();
+  } catch (err) {
+    console.error("Gagal memproses foto nota:", err);
+    resetReceiptPreview();
+    receiptImage = null;
+    currentOcrCanvas = null;
+    showToast(err.message || "Foto nota tidak dapat diproses.", true);
+  }
+}
+
+function openReceiptFromEvent(event) {
+  const button = event.target.closest("[data-view-receipt]");
+  if (!button) return;
+  const transaction = state.transactions.find((item) => item.id === button.dataset.viewReceipt);
+  if (!transaction?.receiptImage) return;
+  document.getElementById("receipt-view-image").src = transaction.receiptImage;
+  document.getElementById("receipt-dialog").showModal();
 }
 
 function renderSaleCart() {
@@ -929,37 +1238,47 @@ document.getElementById("import-data").addEventListener("change", (event) => {
 document.getElementById("close-sync-dialog").addEventListener("click", () => document.getElementById("sync-dialog").close());
 document.getElementById("transaction-type").addEventListener("change", updateTransactionMode);
 document.getElementById("income-mode").addEventListener("change", updateTransactionMode);
-document.getElementById("choose-receipt").addEventListener("click", () => document.getElementById("receipt-file").click());
-document.getElementById("receipt-file").addEventListener("change", async (event) => {
-  const file = event.currentTarget.files[0];
+const btnCamera = document.getElementById("btn-camera-receipt");
+if (btnCamera) {
+  btnCamera.addEventListener("click", () => document.getElementById("receipt-camera").click());
+}
+
+const btnFile = document.getElementById("btn-file-receipt");
+if (btnFile) {
+  btnFile.addEventListener("click", () => document.getElementById("receipt-file").click());
+}
+
+const handleReceiptFileChange = async (event) => {
+  const file = event.currentTarget.files && event.currentTarget.files[0];
   event.currentTarget.value = "";
   if (!file) return;
-  if (!file.type.startsWith("image/") || file.size > 15 * 1024 * 1024) {
-    showToast("Pilih foto nota yang valid dengan ukuran maksimal 15 MB.", true);
+  if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) {
+    showToast("Pilih foto nota yang valid (maksimal 20 MB).", true);
     return;
   }
-  const status = document.getElementById("receipt-status");
-  status.textContent = "Menyiapkan foto nota...";
-  try {
-    receiptImage = await resizeReceiptImage(file);
-    const preview = document.getElementById("receipt-preview");
-    preview.src = receiptImage;
-    preview.hidden = false;
-    document.getElementById("scan-receipt").disabled = false;
-    document.getElementById("remove-receipt").hidden = false;
-    status.textContent = "Foto siap. Tekan “Baca total nota”, lalu periksa nominalnya.";
-  } catch (error) {
-    receiptImage = null;
-    resetReceiptPreview();
-    console.error("Foto nota tidak dapat disiapkan.", error);
-    showToast(error.message || "Foto nota tidak dapat diproses.", true);
-  }
-});
+  await processAndScanReceipt(file);
+};
+
+const cameraInput = document.getElementById("receipt-camera");
+if (cameraInput) cameraInput.addEventListener("change", handleReceiptFileChange);
+
+const fileInput = document.getElementById("receipt-file");
+if (fileInput) fileInput.addEventListener("change", handleReceiptFileChange);
+
 document.getElementById("remove-receipt").addEventListener("click", () => {
   receiptImage = null;
+  currentOcrCanvas = null;
   resetReceiptPreview();
+  showToast("Foto nota dihapus.");
 });
-document.getElementById("scan-receipt").addEventListener("click", scanReceipt);
+
+document.getElementById("scan-receipt").addEventListener("click", () => {
+  if (currentOcrCanvas || receiptImage) {
+    runOcrOnCurrentReceipt();
+  } else {
+    document.getElementById("receipt-camera").click();
+  }
+});
 document.getElementById("transaction-rows").addEventListener("click", openReceiptFromEvent);
 document.getElementById("recent-transactions").addEventListener("click", openReceiptFromEvent);
 document.getElementById("close-receipt-dialog").addEventListener("click", () => document.getElementById("receipt-dialog").close());

@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -262,16 +263,59 @@
           <div class="sale-total-row"><span>Total pemasukan</span><strong id="sale-total">Rp0</strong></div>
         </section>
         <div id="transaction-manual-fields">
-          <label class="field-label" for="transaction-description">Keterangan</label><input id="transaction-description" class="input" name="description" placeholder="Contoh: Belanja stok atau pemasukan lain" maxlength="100" />
-          <label class="field-label" for="transaction-amount">Jumlah</label><div class="price-input"><span>Rp</span><input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" /></div>
           <section id="expense-receipt-panel" class="receipt-panel" hidden>
-            <span class="field-label">Foto nota belanja <span class="field-hint">Opsional</span></span>
-            <p class="receipt-help">Foto diproses di perangkat ini; koneksi internet diperlukan untuk memuat pembaca nota. Nominal bisa kamu periksa sebelum disimpan.</p>
-            <input id="receipt-file" type="file" accept="image/*" capture="environment" hidden />
-            <div class="receipt-actions"><button id="choose-receipt" class="button button-secondary" type="button">📷 Foto / pilih nota</button><button id="scan-receipt" class="button button-secondary" type="button" disabled>Baca total nota</button><button id="remove-receipt" class="text-button" type="button" hidden>Hapus foto</button></div>
-            <img id="receipt-preview" class="receipt-preview" alt="Pratinjau foto nota" hidden />
-            <p id="receipt-status" class="receipt-status" role="status" aria-live="polite">Foto nota tersimpan di perangkat ini, tidak ikut tersinkron ke Google Sheets.</p>
+            <div class="receipt-panel-head">
+              <span class="field-label">Foto nota & auto-baca <span class="field-hint">Otomatis</span></span>
+              <span class="receipt-badge">⚡ Auto OCR</span>
+            </div>
+            <p class="receipt-help">Ambil foto nota dengan kamera atau pilih dari galeri. Total belanja akan <strong>langsung dibaca dan terisi otomatis</strong>.</p>
+            
+            <!-- Hidden inputs kamera & file picker -->
+            <input id="receipt-camera" type="file" accept="image/*" capture="environment" hidden />
+            <input id="receipt-file" type="file" accept="image/*" hidden />
+            
+            <div class="receipt-actions">
+              <button id="btn-camera-receipt" class="button button-primary receipt-btn-camera" type="button">
+                <span class="button-icon">📷</span> Ambil foto nota
+              </button>
+              <button id="btn-file-receipt" class="button button-secondary receipt-btn-file" type="button">
+                <span class="button-icon">📁</span> Galeri / file
+              </button>
+              <button id="scan-receipt" class="button button-secondary receipt-btn-rescan" type="button" hidden>
+                🔄 Pindai ulang
+              </button>
+              <button id="remove-receipt" class="text-button" type="button" hidden>
+                Hapus foto
+              </button>
+            </div>
+
+            <!-- Pratinjau & Status OCR Interaktif -->
+            <div id="receipt-preview-wrap" class="receipt-preview-wrap" hidden>
+              <div class="receipt-preview-box">
+                <img id="receipt-preview" class="receipt-preview" alt="Pratinjau foto nota" />
+                <div id="receipt-scan-laser" class="receipt-scan-laser" hidden></div>
+              </div>
+              <div class="receipt-feedback">
+                <div id="receipt-status-pill" class="receipt-status-pill status-ready">
+                  <span id="receipt-status-icon">📷</span>
+                  <span id="receipt-status-text">Foto siap</span>
+                </div>
+                <div id="receipt-progress-bar" class="receipt-progress-bar" hidden>
+                  <div id="receipt-progress-fill" class="receipt-progress-fill"></div>
+                </div>
+                <p id="receipt-status" class="receipt-status" role="status" aria-live="polite">Foto nota tersimpan di perangkat ini.</p>
+              </div>
+            </div>
           </section>
+
+          <label class="field-label" for="transaction-description">Keterangan</label>
+          <input id="transaction-description" class="input" name="description" placeholder="Contoh: Belanja stok atau operasional" maxlength="100" />
+          
+          <label class="field-label" for="transaction-amount">Jumlah</label>
+          <div class="price-input" id="price-input-wrapper">
+            <span>Rp</span>
+            <input id="transaction-amount" name="amount" type="number" min="1" step="1" placeholder="0" />
+          </div>
         </div>
         <label class="field-label" for="transaction-date">Tanggal</label><input id="transaction-date" class="input" name="date" type="date" required />
         <div class="dialog-actions"><button type="button" class="button button-secondary" id="cancel-dialog">Batal</button><button class="button button-primary" type="submit">Simpan transaksi <span>→</span></button></div>
